@@ -1,0 +1,7 @@
+build/
+*.tar.gz
+.codebuddy/
+workbuddy/bin/
+workbuddy/scripts/
+workbuddy/bin_64/*
+!workbuddy/bin_64/.gitkeep

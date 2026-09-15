@@ -1,0 +1,14 @@
+# 路由器端 busybox 无法执行 CRLF 脚本，强制 LF 入库与检出
+*.sh        text eol=lf
+*.asp       text eol=lf
+*.md        text eol=lf
+*.go        text eol=lf
+*.mod       text eol=lf
+*.sum       text eol=lf
+*.yml       text eol=lf
+*.js        text eol=lf
+version     text eol=lf
+.valid      text eol=lf
+check.sh    text eol=lf
+build_ipq64.sh text eol=lf
+*.png       binary

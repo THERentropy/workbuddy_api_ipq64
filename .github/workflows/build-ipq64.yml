@@ -1,0 +1,112 @@
+name: build-ipq64
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "上游 workbuddy2api 的分支 / tag / commit"
+        required: false
+        default: "master"
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    name: 语法检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shell 语法检查（busybox ash 兼容）
+        run: |
+          set -e
+          for f in workbuddy/scripts-ipq64/*.sh workbuddy/install.sh workbuddy/uninstall.sh build_ipq64.sh; do
+            [ -f "$f" ] || continue
+            echo "check $f"
+            sh -n "$f"
+          done
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: guard 静态检查
+        run: |
+          cd guard
+          go vet ./...
+          go build -o /tmp/wb2api-ctl .
+
+  build:
+    name: 交叉编译并打包
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: 检出上游 workbuddy2api
+        uses: actions/checkout@v4
+        with:
+          repository: Sliverkiss/workbuddy2api
+          ref: ${{ github.event.inputs.upstream_ref || 'master' }}
+          path: _upstream
+
+      - name: 记录上游版本
+        run: |
+          cd _upstream
+          echo "UPSTREAM_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "UPSTREAM_DATE=$(git log -1 --format=%cd --date=short)" >> $GITHUB_ENV
+
+      - name: 编译上游二进制（linux/arm64 静态）
+        run: |
+          set -e
+          mkdir -p workbuddy/bin_64
+          cd _upstream
+          export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
+          go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api       ./cmd/server
+          go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-login ./cmd/login
+          go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-signin ./cmd/signin
+          go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-credit ./cmd/credit
+
+      - name: 编译自研控制二进制 wb2api-ctl
+        run: |
+          set -e
+          cd guard
+          export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
+          go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-ctl .
+
+      - name: 打包离线安装包
+        run: |
+          set -e
+          chmod +x build_ipq64.sh
+          ./build_ipq64.sh
+          ls -lh workbuddy.tar.gz
+          file workbuddy/bin_64/* || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workbuddy-ipq64
+          path: |
+            workbuddy.tar.gz
+            version
+            config.json.js
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            workbuddy.tar.gz
+            version
+            config.json.js
+          body: |
+            上游 workbuddy2api: ${{ env.UPSTREAM_SHA }} (${{ env.UPSTREAM_DATE }})
+            平台: koolshare ipq64 软件中心 (aarch64)
