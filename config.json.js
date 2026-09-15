@@ -1,5 +1,5 @@
 {
-"version":"1.1.2",
+"version":"1.1.3",
 "md5":"",
 "home_url":"Module_workbuddy.asp",
 "title":"WorkBuddy 网关",

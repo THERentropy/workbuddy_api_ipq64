@@ -51,9 +51,10 @@ wb_out() {
 	f="${WB_UPLOAD_DIR}/$1"
 	cat > "${f}"
 	cp -f "${f}" "${WB_TMP_DIR}/$1" 2>/dev/null
-	if [ -d "/www/_temp" ]; then
-		cp -f "${f}" "/www/_temp/$1" 2>/dev/null
-	fi
+	# /www 是 httpd 的站点根，写一份到这里可以让 /_temp/<file> 直接命中；
+	# /www 一般在内存盘上，不产生闪存写入。
+	mkdir -p /www/_temp 2>/dev/null
+	cp -f "${f}" "/www/_temp/$1" 2>/dev/null
 	echo "${f}"
 }
 

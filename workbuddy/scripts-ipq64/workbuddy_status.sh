@@ -9,12 +9,27 @@
 source /koolshare/scripts/base.sh
 source /koolshare/scripts/workbuddy_env.sh
 
+# --dbus：由页面在「文件通道取不到」时追加，此时把结果同步写进 dbus 兜底。
+# 正常情况不写，避免 30 秒一次的状态轮询频繁写 nvram。
+USE_DBUS=0
+for a in "$@"; do
+	[ "${a}" = "--dbus" ] && USE_DBUS=1
+done
+
 case "$1" in
 	models)
-		"${WB_CTL}" status models | wb_out workbuddy_models.json
+		if [ "${USE_DBUS}" = "1" ]; then
+			"${WB_CTL}" status models | wb_result workbuddy_models.json
+		else
+			"${WB_CTL}" status models | wb_out workbuddy_models.json
+		fi
 		;;
 	*)
-		"${WB_CTL}" status | wb_out workbuddy_status.json
+		if [ "${USE_DBUS}" = "1" ]; then
+			"${WB_CTL}" status | wb_result workbuddy_status.json
+		else
+			"${WB_CTL}" status | wb_out workbuddy_status.json
+		fi
 		;;
 esac
 

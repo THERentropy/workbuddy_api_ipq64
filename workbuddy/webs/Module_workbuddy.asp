@@ -410,17 +410,19 @@ function wbPost(script, params, fields, cb){
 // 结果文件的位置：多数固件 httpd 把 /_temp/ 映射到 /tmp/upload/，
 // 少数映射到 /tmp/ 或 /www/_temp/，脚本三处都写，这里按顺序尝试。
 var WB_TEMP_URLS = ["/_temp/", "/tmp/"];
+var wbFileOK = true; // 文件通道是否可用；不可用时让脚本改用 dbus 回传
 function wbFetch(name, cb){
 	var i = 0;
 	function tryNext(){
 		if(i >= WB_TEMP_URLS.length){
-			cb({"ok":false, "err":"读取 " + name + " 失败（已尝试 /_temp/、/tmp/）"});
+			wbFileOK = false;
+			cb({"ok":false, "err":"读取 " + name + " 失败（已尝试 /_temp/、/tmp/，将改用 dbus 通道）"});
 			return;
 		}
 		var url = WB_TEMP_URLS[i++] + name;
 		$.ajax({
 			type: "GET", url: url, cache: false, dataType: "json", timeout: 20000,
-			success: function(d){ cb(d); },
+			success: function(d){ wbFileOK = true; cb(d); },
 			error: function(){ tryNext(); }
 		});
 	}
@@ -468,7 +470,7 @@ $(".wb-tab").click(function(){
 
 /* ---------- 状态 ---------- */
 function loadStatus(){
-	wbRun("workbuddy_status", [""], {}, "workbuddy_status.json", function(d){
+	wbRun("workbuddy_status", (wbFileOK ? [""] : ["", "--dbus"]), {}, "workbuddy_status.json", function(d){
 		if(!d.ok){ $("#kpi_service").html('<span class="wb-badge b-err">异常</span>'); $("#kpi_service_foot").text(d.err || ""); return; }
 		if(!d.running){
 			$("#kpi_service").html('<span class="wb-badge b-err">未运行</span>');
