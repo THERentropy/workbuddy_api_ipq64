@@ -31,12 +31,31 @@ if [ $# -ge 2 ]; then
 	esac
 fi
 
-# wb_respond —— 按官方约定把请求 id 回给页面：{"result":<id>}
+# wb_respond —— 告诉软件中心「脚本执行完了」。
+#
+# ★★ 这里是整个插件最容易踩死的地方 ★★
+#   软件中心的 /_api/ 是「回调式」的，不是看脚本的 stdout。base.sh 里定义的是：
+#       http_response() { curl -X POST -d "$1" http://$LANIP:3030/_resp/$ID; }
+#   即：httpd 收到 POST /_api/ 后，会一直把浏览器那个请求挂着，等脚本回调
+#   http://127.0.0.1:3030/_resp/<id> 才把结果吐回去。
+#   脚本不回调，浏览器就永远卡在「获取中」，直到 http 超时——而脚本本身
+#   其实是执行成功了的。所以每个入口脚本结束前都必须调用一次本函数。
 wb_respond() {
 	case "${WB_REQ_ID}" in
-		'' | *[!0-9]*) return 0 ;;
+		'' | *[!0-9]*) return 0 ;;      # 手工执行（无 id），不用回调
 	esac
-	echo "{\"result\":${WB_REQ_ID}}"
+	# 注意：不要用 `command -v` 判断 http_response 是否存在 ——
+	# 这台固件的 /bin/sh 没有 command 内建（会报 "command: not found"），
+	# 判断会恒为假，回调静默丢失，页面就一直卡在「获取中」。
+	# 用 base.sh 一定会导出的 LANIP / ID 来判断更可靠。
+	if [ -n "${LANIP}" ] && [ -n "${ID}" ]; then
+		# 先用自己的 curl（加 -s），官方 http_response 会把 curl 进度条写进日志；
+		# 万一 curl 不在 PATH，再退回官方函数。
+		curl -s -X POST -d "${WB_REQ_ID}" "http://${LANIP}:3030/_resp/${ID}" >/dev/null 2>&1 \
+			|| http_response "${WB_REQ_ID}" >/dev/null 2>&1
+	else
+		echo "${WB_REQ_ID}"
+	fi
 }
 # 二进制以 .gz 常驻 jffs，运行时解压到 /tmp（内存盘）：
 # 既省闪存空间，又避免 UPX 在 aarch64 静态二进制上的 SIGILL 问题。
@@ -190,3 +209,13 @@ wb_pidof() {
 wb_esc() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
+
+# ---------------------------------------------------------------------------
+# 每次 /_api/ 调用留一条记录（写 /tmp 内存盘，不磨损闪存）。
+# 软件中心的调用是「回调式」的，脚本里出问题不会在页面上有任何提示，
+# 这条日志是唯一能看出「httpd 到底把什么参数传给了哪个脚本」的地方：
+#   tail -20 /tmp/workbuddy.log
+# ---------------------------------------------------------------------------
+if [ -n "${WB_REQ_ID}" ]; then
+	echo "【$(date '+%Y-%m-%d %H:%M:%S')】/_api/ → $(basename "$0") 参数=[$*] ID=${WB_REQ_ID}" >> "${WB_SERVICE_LOG}"
+fi

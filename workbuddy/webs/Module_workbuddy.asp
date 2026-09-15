@@ -474,12 +474,14 @@ function post(script, params, fields, cb){
 				var m = String(txt).match(/\{\s*"result"\s*:\s*(-?\d+)\s*\}/);
 				if(m){ try{ r = JSON.parse(m[0]); }catch(e2){} }
 			}
-			if(r && r.result === -403){
+			if(r && String(r.result) === "-403"){
 				DIAG.post = false;
 				cb("会话失效（/_api/ 返回 -403），请重新登录路由器后再试");
 				return;
 			}
-			DIAG.post = r ? (r.result === id) : null;
+			// ★ 必须比字符串：httpd 回的是 {"result": "246810"}（带引号的字符串），
+			//   id 是数字，用 === 严格比较永远为假，会把成功判成失败。
+			DIAG.post = r ? (String(r.result) === String(id)) : null;
 			cb(null);
 		},
 		error: function(xhr){ DIAG.post = false; cb("提交失败：HTTP " + (xhr && xhr.status ? xhr.status : "超时")); }
