@@ -217,6 +217,22 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 				下游客户端请使用「对外端口 + 分发密钥」访问，例如 <span class="wb-mono">http://路由器IP:17863/v1/chat/completions</span>；上游网关只绑定 127.0.0.1，不直接暴露。
 			</div>
 		</div>
+
+		<div class="wb-card">
+			<h3>通道诊断
+				<span class="wb-inline" style="margin-left:auto"><button class="wb-btn mini" id="wb_btn_diag">重新检测</button></span>
+			</h3>
+			<table class="wb-table"><tbody>
+				<tr><td>POST /_api/（执行脚本）</td><td id="dg_post">-</td></tr>
+				<tr><td>结果文件 /_temp/</td><td id="dg_file">-</td></tr>
+				<tr><td>dbus 回传通道</td><td id="dg_dbus">-</td></tr>
+				<tr><td>脚本名（必须与 /koolshare/scripts/ 下文件名一致）</td><td id="dg_scripts" class="wb-mono">-</td></tr>
+			</tbody></table>
+			<div class="wb-note" style="margin-top:10px">
+				「POST」红色 = 软件中心没执行脚本（method 名与脚本文件名不一致时会静默失败）；
+				「结果文件」红色 = httpd 的 <span class="wb-mono">/_temp/</span> 没映射到 <span class="wb-mono">/tmp/upload/</span>。
+			</div>
+		</div>
 	</div>
 
 	<!-- ============ 账号池 ============ -->
@@ -377,324 +393,422 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 <div class="wb-mask" id="wb_mask"><div class="wb-modal" id="wb_modal"></div></div>
 
 <script>
-var dbus_wb = {};
-var wb_busy = false;
+/* ============================================================================
+ * WorkBuddy 网关 —— 页面脚本
+ *
+ * 与软件中心交互只有两条通道，别再引入第三种：
+ *   1) POST /_api/            执行 /koolshare/scripts/<method>
+ *      ★ 关键：method 必须等于脚本的真实文件名（带 .sh）。
+ *        写成 "workbuddy_status" 时，中心会去找
+ *        /koolshare/scripts/workbuddy_status —— 这个文件不存在，
+ *        于是它静默返回、什么都不执行，页面表现就是"点了没反应"。
+ *        官方插件同理：kms_config.sh、entware_status.sh 都是带扩展名的。
+ *   2) GET /_temp/<file>      读脚本写在 /tmp/upload/ 下的结果文件
+ *
+ * 动作是异步的，所以流程是：POST 提交 → 轮询结果文件 → 拿不到就退到 dbus。
+ * ============================================================================ */
+var S = {
+	status:  "workbuddy_status.sh",
+	account: "workbuddy_account.sh",
+	key:     "workbuddy_key.sh",
+	log:     "workbuddy_log.sh",
+	migrate: "workbuddy_migrate.sh",
+	config:  "workbuddy_config.sh"
+};
 
-/* ---------- 通用 ---------- */
-function wbToast(msg, type){
+var CACHE = { status: null, auths: null, dbus: {} };
+var DIAG  = { post: null, file: null, dbus: null };
+var BUSY  = false;
+
+/* ============================ 基础工具 ============================ */
+function esc(s){
+	return String(s === undefined || s === null ? "" : s)
+		.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function p2(n){ return (n < 10 ? "0" : "") + n; }
+function ts(t){
+	if(!t) return "-";
+	var d = new Date(t * 1000);
+	return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + " " + p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds());
+}
+function ago(t){
+	if(!t) return "从未";
+	var s = Math.floor(new Date().getTime() / 1000) - t;
+	if(s < 60) return s + " 秒前";
+	if(s < 3600) return Math.floor(s / 60) + " 分钟前";
+	if(s < 86400) return Math.floor(s / 3600) + " 小时前";
+	return Math.floor(s / 86400) + " 天前";
+}
+function toast(msg, type){
 	var t = $("#wb_toast");
 	t.removeClass("ok err info").addClass(type || "info").text(msg).show();
 	clearTimeout(t.data("timer"));
-	t.data("timer", setTimeout(function(){ t.fadeOut(200); }, 2600));
+	t.data("timer", setTimeout(function(){ t.fadeOut(200); }, type === "err" ? 5000 : 2600));
 }
-function wbModal(html){ $("#wb_modal").html(html); $("#wb_mask").addClass("show"); }
-function wbClose(){ $("#wb_mask").removeClass("show"); }
-function esc(s){
-	return String(s == undefined || s == null ? "" : s)
-		.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+function modal(html){ $("#wb_modal").html(html); $("#wb_mask").addClass("show"); }
+function closeModal(){ $("#wb_mask").removeClass("show"); }
+function badge(text, cls){ return '<span class="wb-badge ' + cls + '">' + esc(text) + "</span>"; }
+function setBadge(sel, v, okText, badText){
+	if(v === true){ $(sel).html(badge(okText, "b-ok")); }
+	else if(v === false){ $(sel).html(badge(badText, "b-err")); }
+	else { $(sel).html('<span class="wb-note">未检测</span>'); }
 }
-function ts(t){ if(!t) return "-"; var d = new Date(t*1000); return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds()); }
-function p2(n){ return (n<10?"0":"")+n; }
-function ago(t){ if(!t) return "从未"; var s = Math.floor(Date.now()/1000) - t; if(s<60) return s+" 秒前"; if(s<3600) return Math.floor(s/60)+" 分钟前"; if(s<86400) return Math.floor(s/3600)+" 小时前"; return Math.floor(s/86400)+" 天前"; }
+function chkVal(id){ return $("#" + id).prop("checked") ? "1" : "0"; }
+function setChk(id, v){ $("#" + id).prop("checked", (v === "1" || v === 1 || v === true)); }
 
-/* ---------- 软件中心 API ---------- */
-// wb_busy 只用来让「自动刷新」避让，绝不用于丢弃请求。
-// 之前写成 if(wb_busy) return —— 请求不发、不报错、不回调，
-// 用户点了按钮会永远卡在「轮询中…」，而且服务端什么都看不到，极难排查。
-var wb_busy = false;
-function wbPost(script, params, fields, cb){
-	wb_busy = true;
-	var postData = {"id": parseInt(Math.random()*100000), "method": script, "params": params || [""], "fields": fields || {}};
+/* ============================ 通道层 ============================ */
+// POST /_api/：成功时中心回 {"result": <我们发去的 id>}
+function post(script, params, fields, cb){
+	var id = Math.floor(Math.random() * 100000000);
+	var body = { "id": id, "method": script, "params": params || [""], "fields": fields || {} };
 	$.ajax({
-		type: "POST", url: "/_api/", cache: false, dataType: "json",
-		data: JSON.stringify(postData),
-		timeout: 300000,   // OAuth poll 最长可能要几分钟
-		complete: function(){ wb_busy = false; },
-		success: function(data){ if(cb) cb(null, data); },
-		error: function(xhr){ if(cb) cb(xhr, null); }
+		type: "POST", url: "/_api/", dataType: "json", cache: false,
+		data: JSON.stringify(body), timeout: 300000,
+		success: function(r){
+			DIAG.post = (r && r.result === id);
+			if(r && r.result === -403){ DIAG.post = false; cb("会话失效（/_api/ 返回 -403），请重新登录路由器后再试"); return; }
+			cb(null);
+		},
+		error: function(xhr){ DIAG.post = false; cb("提交失败：HTTP " + (xhr && xhr.status ? xhr.status : "超时")); }
 	});
 }
-// 结果文件的位置：多数固件 httpd 把 /_temp/ 映射到 /tmp/upload/，
-// 少数映射到 /tmp/ 或 /www/_temp/，脚本三处都写，这里按顺序尝试。
-var WB_TEMP_URLS = ["/_temp/", "/tmp/"];
-var wbFileOK = true; // 文件通道是否可用；不可用时让脚本改用 dbus 回传
-function wbFetch(name, cb){
-	var i = 0;
-	function tryNext(){
-		if(i >= WB_TEMP_URLS.length){
-			wbFileOK = false;
-			// fetchfail 标记：用来区分「文件取不到」和「脚本返回了错误」，
-			// 后者是本次动作的真实结论，要立刻展示，不能继续傻等
-			cb({"ok":false, "fetchfail":true, "err":"读取 " + name + " 失败（已尝试 /_temp/、/tmp/）"});
-			return;
+
+// GET 结果文件：404 说明"通道正常、文件还没生成"，其它错误才算通道不通
+function fetchFile(name, cb){
+	$.ajax({
+		type: "GET", url: "/_temp/" + name, dataType: "json", cache: false, timeout: 20000,
+		success: function(d){ DIAG.file = true; cb(d); },
+		error: function(x){
+			if(x && x.status === 404){ DIAG.file = true; cb(null); return; }
+			$.ajax({
+				type: "GET", url: "/tmp/" + name, dataType: "json", cache: false, timeout: 20000,
+				success: function(d){ DIAG.file = true; cb(d); },
+				error: function(x2){ DIAG.file = (x2 && x2.status === 404); cb(null); }
+			});
 		}
-		var url = WB_TEMP_URLS[i++] + name;
-		$.ajax({
-			type: "GET", url: url, cache: false, dataType: "json", timeout: 20000,
-			success: function(d){ wbFileOK = true; cb(d); },
-			error: function(){ tryNext(); }
-		});
-	}
-	tryNext();
+	});
 }
-// 脚本是异步执行的（OAuth poll 可能连腾讯轮询几十秒），所以结果要轮询着取：
-//   文件通道可用 → 一直轮询文件，最多 MAX_WAIT 秒
-//   文件通道不可用 → 轮询 dbus（脚本已同步写入 workbuddy_last_result）
-// 注意别只看一次就放弃，否则会读到"上一次"的旧结果。
-var WB_MAX_WAIT_SEC = 45;
-function wbRun(script, params, fields, outFile, cb){
-	wbPost(script, params, fields, function(err){
-		if(err){ cb({"ok":false,"err":"调用 " + script + " 失败"}); return; }
-		// 脚本只在结束时写一次结果，且动作开始前已清空，
-		// 所以任何带 ok/err 的对象（只要不是取不到文件的 fetchfail）都是本次结论
-		function accept(o){ return o && (o.ok || (o.err && !o.fetchfail)); }
-		var tries = 0;
-		function attempt(){
+
+function getDbus(cb){
+	$.ajax({
+		type: "GET", url: "/_api/workbuddy", dataType: "json", cache: false, timeout: 15000,
+		success: function(d){
+			CACHE.dbus = (d && d.result && d.result[0]) ? d.result[0] : {};
+			DIAG.dbus = true;
+			cb(CACHE.dbus);
+		},
+		error: function(){ DIAG.dbus = false; cb({}); }
+	});
+}
+
+// 动作：提交 → 轮询结果（脚本只在结束时写一次结果，且开始前已清空）
+function run(script, params, fields, outFile, cb){
+	post(script, params, fields, function(perr){
+		if(perr){ cb({ ok: false, err: perr }); return; }
+		var tries = 0, max = 60;
+		function next(){
+			if(tries < max){ setTimeout(step, 1000); }
+			else { cb({ ok: false, err: "等待结果超时（" + max + " 秒），请重试或查看服务日志" }); }
+		}
+		function step(){
 			tries++;
-			wbFetch(outFile, function(d){
-				if(accept(d)){ cb(d); return; }
-				if(!wbFileOK){
-					// 文件通道不通，改读 dbus
-					wbGetDbus(function(){
-						var s = dbus_wb && dbus_wb.workbuddy_last_result;
+			fetchFile(outFile, function(d){
+				if(d && (d.ok || d.err)){ cb(d); return; }
+				if(DIAG.file === false){
+					// 文件通道不通，用 dbus 兜底（脚本同时写了一份）
+					getDbus(function(m){
+						var s = m && m.workbuddy_last_result;
 						if(s){
 							try{
 								var o = JSON.parse(s);
-								if(accept(o)){ cb(o); return; }
+								if(o && (o.ok || o.err)){ cb(o); return; }
 							}catch(e){}
 						}
-						if(tries < WB_MAX_WAIT_SEC){ setTimeout(attempt, 1000); return; }
-						cb(d);
+						next();
 					});
 					return;
 				}
-				if(tries < WB_MAX_WAIT_SEC){ setTimeout(attempt, 1000); return; }
-				cb(d);
+				next();
 			});
 		}
-		setTimeout(attempt, 700);
+		step();
 	});
 }
-function wbGetDbus(cb){
-	$.ajax({
-		type: "GET", url: "/_api/workbuddy", cache: false, dataType: "json", timeout: 15000,
-		success: function(data){
-			dbus_wb = (data && data.result && data.result[0]) ? data.result[0] : {};
-			if(cb) cb(dbus_wb);
-		},
-		error: function(){ if(cb) cb({}); }
+
+/* ============================ 诊断面板 ============================ */
+function renderDiag(){
+	setBadge("#dg_post", DIAG.post, "/_api/ 正常，脚本已执行", "未执行脚本（检查 method 名）");
+	setBadge("#dg_file", DIAG.file, "/_temp/ 正常（→ /tmp/upload/）", "取不到结果文件");
+	setBadge("#dg_dbus", DIAG.dbus, "dbus 回传正常", "dbus 不可用");
+	$("#dg_scripts").text(S.status + " · " + S.account + " · " + S.key);
+}
+
+/* ============================ 状态总览 ============================ */
+function loadStatus(quiet){
+	run(S.status, [""], {}, "workbuddy_status.json", function(d){
+		renderStatus(d);
+		renderDiag();
+		if(!quiet && d && !d.ok){ toast(d.err || "状态读取失败", "err"); }
 	});
 }
-function dv(k, d){ return (dbus_wb[k] === undefined || dbus_wb[k] === "") ? d : dbus_wb[k]; }
-function setChk(id, v){ $("#"+id).prop("checked", (v === "1" || v === 1 || v === true || v === "true")); }
-function chkVal(id){ return $("#"+id).prop("checked") ? "1" : "0"; }
-
-/* ---------- 标签切换 ---------- */
-$(".wb-tab").click(function(){
-	$(".wb-tab").removeClass("active"); $(this).addClass("active");
-	$(".wb-panel").removeClass("active"); $("#"+$(this).attr("data-p")).addClass("active");
-	if($(this).attr("data-p") === "p_log"){ loadStat(); loadLog(); }
-	if($(this).attr("data-p") === "p_key"){ loadKeys(); }
-	if($(this).attr("data-p") === "p_account"){ loadAccounts(); }
-});
-
-/* ---------- 状态 ---------- */
-function loadStatus(){
-	wbRun("workbuddy_status", (wbFileOK ? [""] : ["", "--dbus"]), {}, "workbuddy_status.json", function(d){
-		if(!d.ok){ $("#kpi_service").html('<span class="wb-badge b-err">异常</span>'); $("#kpi_service_foot").text(d.err || ""); return; }
-		if(!d.running){
-			$("#kpi_service").html('<span class="wb-badge b-err">未运行</span>');
-			$("#kpi_service_foot").text(d.err || "上游网关未就绪");
-			$("#kpi_account").text("-"); $("#kpi_account_foot").text("-");
-			renderAccounts([]);
-			return;
-		}
-		$("#kpi_service").html('<span class="wb-badge b-ok">运行中</span>');
-		$("#kpi_service_foot").text("上游 " + (d.total||0) + " 个账号 · 会话粘性 " + (d.sticky_sessions||0));
-		$("#kpi_account").text((d.healthy||0) + " / " + (d.total||0));
-		$("#kpi_account_foot").text("冷却中 " + (d.cooling||0) + " · 已禁用 " + (d.disabled||0));
-		renderAccounts(d.accounts || []);
-	});
-	wbFetch("workbuddy_runtime.json", function(d){
-		if(!d.ok) return;
+function renderStatus(d){
+	if(!d || !d.ok){
+		$("#kpi_service").html(badge("读取失败", "b-err"));
+		$("#kpi_service_foot").text((d && d.err) || "无返回");
+		$("#kpi_account").text("-"); $("#kpi_account_foot").text("-");
+		CACHE.status = null;
+		renderAccounts();
+		return;
+	}
+	if(!d.running){
+		$("#kpi_service").html(badge("未运行", "b-err"));
+		$("#kpi_service_foot").text(d.err ? String(d.err).slice(0, 60) : "上游网关未就绪");
+		$("#kpi_account").text("-"); $("#kpi_account_foot").text("-");
+		CACHE.status = null;
+		renderAccounts();
+		return;
+	}
+	CACHE.status = d;
+	$("#kpi_service").html(badge("运行中", "b-ok"));
+	$("#kpi_service_foot").text("账号 " + (d.total || 0) + " 个 · 会话粘性 " + (d.sticky_sessions || 0));
+	$("#kpi_account").text((d.healthy || 0) + " / " + (d.total || 0));
+	$("#kpi_account_foot").text("冷却中 " + (d.cooling || 0) + " · 已禁用 " + (d.disabled || 0));
+	renderAccounts();
+}
+function loadRuntime(){
+	fetchFile("workbuddy_runtime.json", function(d){
+		if(!d || !d.ok) return;
 		$("#rt_listen").text(":" + d.listen_port + "（对外）");
 		$("#rt_upstream").text("127.0.0.1:" + d.upstream_port);
-		$("#rt_pid").text("网关 " + (d.upstream_pid||"-") + " · 代理 " + (d.ctl_pid||"-"));
+		$("#rt_pid").text("网关 " + (d.upstream_pid || "-") + " · 代理 " + (d.ctl_pid || "-"));
 		$("#rt_data").text(d.data_dir);
-		$("#rt_auto").text((d.auto_start === "1" ? "开" : "关") + " / " + (d.watchdog === "1" ? "开" : "关"));
-		$("#rt_wan").html(d.wan === "1" ? '<span class="wb-badge b-warn">已放行 WAN</span>' : '<span class="wb-badge b-ok">仅 LAN</span>');
-		$("#wb_version").text("v" + (d.version||""));
+		$("#rt_auto").text((d.auto_start === "1" ? "开" : "关") + " / 看门狗 " + (d.watchdog === "1" ? "开" : "关"));
+		$("#rt_wan").html(d.wan === "1" ? badge("已放行 WAN", "b-warn") : badge("仅 LAN", "b-ok"));
+		$("#wb_version").text("v" + (d.version || ""));
 	});
 }
 
-function acctState(a){
-	if(a.disabled) return '<span class="wb-badge b-err">已禁用</span>';
-	if(a.cooling) return '<span class="wb-badge b-warn">冷却中</span>';
-	return '<span class="wb-badge b-ok">健康</span>';
+/* ============================ 账号池 ============================ */
+// 以「凭证文件」为准渲染（服务没起来也能看到账号），上游运行态有就合并进来
+function loadAccounts(){
+	run(S.account, ["list"], {}, "workbuddy_accounts.json", function(a){
+		if(a && a.ok && a.accounts){ CACHE.auths = a.accounts; }
+		else if(a && a.err){ toast("读取账号失败：" + a.err, "err"); }
+		renderAccounts();
+	});
+	loadStatus(true);
+	loadRuntime();
 }
-function renderAccounts(list){
-	var tb = $("#account_tb"), html = "";
-	var auths = window.wb_auths || {};
-	for(var i=0;i<list.length;i++){
-		var a = list[i];
-		var nick = a.nickname || ("UID " + a.uid);
-		var exp = auths[a.uid] ? auths[a.uid].expires_at : 0;
-		var pct = 0, txt = "-";
-		if(exp){
-			var left = exp - Math.floor(Date.now()/1000);
-			var total = 60*24*3600;
-			pct = Math.max(0, Math.min(100, Math.round(left/total*100)));
-			txt = left > 0 ? (Math.floor(left/86400) + " 天") : "已过期";
+function renderAccounts(){
+	var auths = CACHE.auths || [];
+	var st = CACHE.status;
+	var byUid = {};
+	if(st && st.accounts){
+		for(var i = 0; i < st.accounts.length; i++){ byUid[st.accounts[i].uid] = st.accounts[i]; }
+	}
+	// 合并两侧的 uid：凭证为准，上游独有的也补上（例如手动放进 auths 的）
+	var rows = [], seen = {};
+	for(var j = 0; j < auths.length; j++){
+		var u = auths[j].uid;
+		seen[u] = true;
+		rows.push({ cred: auths[j], rt: byUid[u] || null });
+	}
+	for(var k in byUid){
+		if(!seen[k]){ rows.push({ cred: null, rt: byUid[k] }); }
+	}
+
+	var html = "";
+	for(var n = 0; n < rows.length; n++){
+		var c = rows[n].cred, r = rows[n].rt;
+		var uid = (c && c.uid) || (r && r.uid) || "";
+		var nick = (r && r.nickname) || (c && c.nickname) || ("UID " + uid);
+		var realm = (r && r.realm) || (c && c.realm) || "cn";
+
+		var state;
+		if(r){
+			if(r.disabled) state = badge("已禁用", "b-err");
+			else if(r.cooling) state = badge("冷却中", "b-warn");
+			else state = badge("健康", "b-ok");
+			if(r.reason) state += '<div class="wb-note">' + esc(r.reason) + '</div>';
+		}else{
+			state = badge("服务未运行", "b-muted");
 		}
+
+		// 有效期：优先用凭证里的 expires_at
+		var exp = c ? c.expires_at : 0;
+		var pct = 0, txt = "未知";
+		if(exp){
+			var left = exp - Math.floor(new Date().getTime() / 1000);
+			pct = Math.max(0, Math.min(100, Math.round(left / (60 * 24 * 3600) * 100)));
+			txt = left > 0 ? (Math.floor(left / 86400) + " 天") : "已过期";
+		}
+		var credit = r && r.credits !== undefined ? r.credits : "-";
+
 		html += "<tr>"
-			+ '<td data-l="账号">' + esc(nick) + '<div class="wb-note wb-mono">' + esc(a.uid||"") + '</div></td>'
-			+ '<td data-l="域">' + (a.realm === "global" ? '<span class="wb-badge b-info">国际版</span>' : '<span class="wb-badge b-muted">国内版</span>') + '</td>'
-			+ '<td data-l="状态">' + acctState(a) + (a.reason ? '<div class="wb-note">' + esc(a.reason) + '</div>' : '') + '</td>'
-			+ '<td data-l="积分">' + (a.credits == undefined ? "-" : a.credits) + '</td>'
+			+ '<td data-l="账号">' + esc(nick) + '<div class="wb-note wb-mono">' + esc(uid) + '</div></td>'
+			+ '<td data-l="域">' + (realm === "global" ? badge("国际版", "b-info") : badge("国内版", "b-muted")) + '</td>'
+			+ '<td data-l="状态">' + state + '</td>'
+			+ '<td data-l="积分">' + credit + '</td>'
 			+ '<td data-l="有效期"><div class="wb-bar"><i style="width:' + pct + '%"></i></div><div class="wb-note">' + txt + '</div></td>'
-			+ '<td data-l="在途">' + (a.in_flight||0) + '</td>'
-			+ '<td data-l="操作"><button class="wb-btn mini danger" onclick="wbDelAccount(\'' + esc(a.uid) + '\')">删除</button></td>'
+			+ '<td data-l="在途">' + (r ? (r.in_flight || 0) : "-") + '</td>'
+			+ '<td data-l="操作"><button class="wb-btn mini danger" onclick="removeAccount(\'' + esc(uid) + '\')">删除</button></td>'
 			+ "</tr>";
 	}
-	tb.html(html);
-	$("#account_empty").toggle(list.length === 0);
+	$("#account_tb").html(html);
+	$("#account_empty").toggle(rows.length === 0);
 }
-function loadAccounts(){
-	wbRun("workbuddy_account", ["list"], {}, "workbuddy_accounts.json", function(d){
-		if(d.ok && d.accounts){
-			var m = {};
-			for(var i=0;i<d.accounts.length;i++){ m[d.accounts[i].uid] = d.accounts[i]; }
-			window.wb_auths = m;
-		}
-	});
-	loadStatus();
-}
-function wbDelAccount(uid){
-	if(!confirm("确认删除账号 " + uid + " 的凭证？")) return;
-	wbRun("workbuddy_account", ["remove", "--uid=" + uid], {}, "workbuddy_action.json", function(d){
-		wbToast(d.ok ? "已删除" : ("失败：" + (d.err||"")), d.ok ? "ok" : "err");
-		if(d.ok) setTimeout(loadAccounts, 1200);
+function removeAccount(uid){
+	if(!uid){ toast("没有 uid，无法删除", "err"); return; }
+	if(!confirm("确认删除账号 " + uid + " 的凭证？删除后该账号立即退出池子。")) return;
+	run(S.account, ["remove", "--uid=" + uid], {}, "workbuddy_action.json", function(d){
+		toast(d.ok ? "已删除" : ("删除失败：" + (d.err || "")), d.ok ? "ok" : "err");
+		if(d.ok) setTimeout(loadAccounts, 1500);
 	});
 }
 
-/* ---------- 添加账号 ---------- */
+/* 添加账号：三步引导，全程一个 state，别中途再点「获取授权链接」 */
 $("#wb_btn_add_account").click(function(){
-	var realm = "cn";
-	wbModal('<h4>添加账号</h4>'
-		+ '<div class="wb-steps"><div class="wb-step on" id="st1">1. 获取授权链接</div><div class="wb-step" id="st2">2. 浏览器登录</div><div class="wb-step" id="st3">3. 完成</div></div>'
-		+ '<div class="wb-field"><label>域</label><select class="wb-select" id="lg_realm" style="max-width:200px"><option value="cn">国内版（codebuddy.cn）</option><option value="global">国际版（workbuddy.ai）</option></select></div>'
+	modal('<h4>添加账号</h4>'
+		+ '<div class="wb-steps"><div class="wb-step on" id="st1">1. 取授权链接</div><div class="wb-step" id="st2">2. 浏览器登录</div><div class="wb-step" id="st3">3. 完成</div></div>'
+		+ '<div class="wb-field"><label>域</label><select class="wb-select" id="lg_realm" style="max-width:220px">'
+		+ '<option value="cn">国内版（copilot.tencent.com）</option><option value="global">国际版（workbuddy.ai）</option></select></div>'
 		+ '<div id="lg_box"><button class="wb-btn primary" id="lg_url">获取授权链接</button></div>'
-		+ '<div class="wb-modal-foot"><button class="wb-btn" onclick="wbClose()">关闭</button></div>');
+		+ '<div class="wb-modal-foot"><button class="wb-btn" onclick="closeModal()">关闭</button></div>');
+
 	$("#lg_url").click(function(){
-		realm = $("#lg_realm").val();
-		$("#lg_url").prop("disabled", true).text("获取中…");
-		wbRun("workbuddy_account", ["url", "--realm=" + realm], {}, "workbuddy_login_url.json", function(d){
-			if(!d.ok){ $("#lg_box").html('<span class="wb-badge b-err">' + esc(d.err) + '</span>'); return; }
+		var realm = $("#lg_realm").val();
+		var $b = $(this).prop("disabled", true).text("获取中…");
+		run(S.account, ["url", "--realm=" + realm], {}, "workbuddy_login_url.json", function(d){
+			if(!d.ok){
+				$b.prop("disabled", false).text("重试");
+				$("#lg_box").append('<div style="margin-top:10px">' + badge(d.err || "获取失败", "b-err") + "</div>");
+				return;
+			}
 			$("#st1").removeClass("on").addClass("done"); $("#st2").addClass("on");
-			$("#lg_box").html('<div class="wb-note">请在浏览器打开下面的链接完成登录授权：</div>'
-				+ '<div class="wb-code" id="lg_url_text">' + esc(d.url) + '</div>'
-				+ '<div class="wb-inline"><button class="wb-btn" onclick="wbCopy(\'lg_url_text\')">复制</button>'
-				+ '<a class="wb-btn" target="_blank" href="' + esc(d.url) + '">打开链接</a></div>'
+			$("#lg_box").html('<div class="wb-note">在浏览器打开下面的链接完成登录。'
+				+ '<b>登录完成前不要再点上面的按钮</b>，否则腾讯那边的待授权会话会被新的顶掉。</div>'
+				+ '<div class="wb-code" id="lg_url_text">' + esc(d.url) + "</div>"
+				+ '<div class="wb-inline"><button class="wb-btn" onclick="copyText(\'lg_url_text\')">复制链接</button>'
+				+ '<a class="wb-btn primary" target="_blank" href="' + esc(d.url) + '">打开链接</a></div>'
 				+ '<div class="wb-inline" style="margin-top:14px"><button class="wb-btn primary" id="lg_poll">我已完成登录</button></div>');
 			$("#lg_poll").click(function(){
-				var $b = $(this).prop("disabled", true).text("轮询中… 0s");
+				var $p = $(this).prop("disabled", true);
 				var t0 = new Date().getTime();
+				$p.text("轮询中… 0s");
 				var tm = setInterval(function(){
-					$b.text("轮询中… " + Math.round((new Date().getTime() - t0) / 1000) + "s");
+					$p.text("轮询中… " + Math.round((new Date().getTime() - t0) / 1000) + "s");
 				}, 1000);
-				wbRun("workbuddy_account", ["poll", "--realm=" + realm], {}, "workbuddy_login_poll.json", function(r){
+				run(S.account, ["poll", "--realm=" + realm], {}, "workbuddy_login_poll.json", function(r){
 					clearInterval(tm);
 					if(!r.ok){
-						$("#lg_box").append('<div style="margin-top:10px"><span class="wb-badge b-err">' + esc(r.err || "超时未取到结果，请重试") + '</span></div>');
-						$("#lg_poll").prop("disabled", false).text("重试");
+						$("#lg_box").append('<div style="margin-top:10px">' + badge(r.err || "登录未完成", "b-err") + "</div>");
+						$p.prop("disabled", false).text("重试");
 						return;
 					}
 					$("#st2").removeClass("on").addClass("done"); $("#st3").addClass("done");
 					$("#lg_box").html('<div style="text-align:center;padding:10px 0">'
 						+ '<div style="font-size:30px">🎉</div>'
-						+ '<div style="margin:8px 0">账号已纳管（' + esc(r.action) + '）</div>'
-						+ '<div class="wb-note">' + esc(r.nickname || r.uid) + ' · UID ' + esc(r.uid) + '</div></div>');
-					setTimeout(function(){ wbClose(); loadAccounts(); }, 1500);
+						+ '<div style="margin:8px 0">账号已纳管（' + esc(r.action || "新增") + '）</div>'
+						+ '<div class="wb-note">' + esc(r.nickname || r.uid || "") + "</div></div>");
+					setTimeout(function(){ closeModal(); loadAccounts(); }, 1500);
 				});
 			});
 		});
 	});
 });
-function wbCopy(id){
-	var t = document.getElementById(id);
+function copyText(id){
+	var el = document.getElementById(id);
+	if(!el) return;
 	var ta = document.createElement("textarea");
-	ta.value = t.textContent || t.innerText; document.body.appendChild(ta);
-	ta.select(); try{ document.execCommand("copy"); wbToast("已复制", "ok"); }catch(e){ wbToast("复制失败，请手动选择", "err"); }
+	ta.value = el.textContent || el.innerText;
+	document.body.appendChild(ta);
+	ta.select();
+	try{ document.execCommand("copy"); toast("已复制", "ok"); }
+	catch(e){ toast("复制失败，请手动选择", "err"); }
 	document.body.removeChild(ta);
 }
+
 $("#wb_btn_signin").click(function(){
-	wbRun("workbuddy_account", ["signin"], {}, "workbuddy_action.json", function(d){
-		wbToast(d.ok ? "签到完成" : ("签到失败：" + (d.err||"")), d.ok ? "ok" : "err");
+	var $b = $(this).prop("disabled", true).text("签到中…");
+	run(S.account, ["signin"], {}, "workbuddy_action.json", function(d){
+		$b.prop("disabled", false).text("手动签到");
+		if(!d.ok){ toast("签到失败：" + (d.err || ""), "err"); return; }
+		var out = d.output || "签到完成";
+		modal("<h4>签到结果</h4><div class='wb-logbox'>" + esc(out) + "</div>"
+			+ '<div class="wb-modal-foot"><button class="wb-btn" onclick="closeModal()">关闭</button></div>');
 	});
 });
 $("#wb_btn_refresh_account").click(loadAccounts);
 $("#wb_btn_models").click(function(){
-	wbRun("workbuddy_status", ["models"], {}, "workbuddy_models.json", function(d){
+	var $b = $(this).prop("disabled", true).text("拉取中…");
+	run(S.status, ["models"], {}, "workbuddy_models.json", function(d){
+		$b.prop("disabled", false).text("拉取模型列表");
 		var ids = [];
-		if(d.ok && d.raw && d.raw.data){
-			for(var i=0;i<d.raw.data.length;i++){ ids.push(d.raw.data[i].id); }
+		if(d && d.ok && d.raw && d.raw.data){
+			for(var i = 0; i < d.raw.data.length; i++){ ids.push(d.raw.data[i].id); }
 		}
-		if(ids.length === 0){ $("#model_box").html('<span class="wb-note">未取到模型（服务未运行或账号无授权）</span>'); return; }
+		if(!ids.length){ $("#model_box").html('<span class="wb-note">没取到模型（服务未运行，或账号无授权）</span>'); return; }
 		var h = "";
-		for(var j=0;j<ids.length;j++){ h += '<span class="wb-badge b-info">' + esc(ids[j]) + '</span>'; }
+		for(var j = 0; j < ids.length; j++){ h += badge(ids[j], "b-info"); }
 		$("#model_box").html(h);
 	});
 });
 
-/* ---------- 密钥 ---------- */
+/* ============================ 密钥管理 ============================ */
 function loadKeys(){
-	wbRun("workbuddy_key", ["list"], {}, "workbuddy_key.json", function(d){
-		if(!d.ok){ $("#key_empty").text("读取失败：" + (d.err||"")).show(); return; }
+	run(S.key, ["list"], {}, "workbuddy_key.json", function(d){
+		if(!d.ok){ $("#key_empty").text("读取失败：" + (d.err || "")).show(); return; }
 		var list = d.keys || [], html = "";
-		for(var i=0;i<list.length;i++){
+		for(var i = 0; i < list.length; i++){
 			var k = list[i];
-			var st = !k.enabled ? '<span class="wb-badge b-muted">已停用</span>' : (k.expired ? '<span class="wb-badge b-err">已过期</span>' : '<span class="wb-badge b-ok">可用</span>');
-			var pct = k.token_quota > 0 ? Math.min(100, Math.round(k.token_used / k.token_quota * 100)) : 0;
-			var quota = k.token_quota > 0 ? '<div class="wb-bar"><i style="width:' + pct + '%"></i></div><div class="wb-note">' + k.token_used + " / " + k.token_quota + '</div>' : '<span class="wb-note">不限</span>';
+			var st = !k.enabled ? badge("已停用", "b-muted")
+				: (k.expired ? badge("已过期", "b-err") : badge("可用", "b-ok"));
+			var quota;
+			if(k.token_quota > 0){
+				var pct = Math.min(100, Math.round(k.token_used / k.token_quota * 100));
+				quota = '<div class="wb-bar"><i style="width:' + pct + '%"></i></div><div class="wb-note">' + k.token_used + " / " + k.token_quota + "</div>";
+			}else{
+				quota = '<span class="wb-note">不限</span>';
+			}
 			var lim = [];
 			if(k.max_ips) lim.push("IP数≤" + k.max_ips);
-			if(k.ip_allow && k.ip_allow.length) lim.push("IP白名单");
-			if(k.models && k.models.length) lim.push("模型" + k.models.length + "个");
+			if(k.ip_allow && k.ip_allow.length) lim.push("IP白名单 " + k.ip_allow.length + " 条");
+			if(k.models && k.models.length) lim.push("模型 " + k.models.length + " 个");
 			html += "<tr>"
-				+ '<td data-l="名称">' + esc(k.name||"未命名") + '<div class="wb-note wb-mono">' + esc(k.prefix) + '…</div></td>'
-				+ '<td data-l="状态">' + st + '</td>'
-				+ '<td data-l="有效期">' + (k.expires_at ? ts(k.expires_at) : "永久") + '</td>'
-				+ '<td data-l="配额">' + quota + '</td>'
-				+ '<td data-l="限制">' + (lim.length ? esc(lim.join(" · ")) : "不限") + '</td>'
-				+ '<td data-l="最近使用">' + ago(k.last_used_at) + '</td>'
-				+ '<td data-l="操作"><button class="wb-btn mini" onclick="wbKeyAct(\'' + k.id + '\',\'' + (k.enabled?"disable":"enable") + '\')">' + (k.enabled?"停用":"启用") + '</button> '
-				+ '<button class="wb-btn mini danger" onclick="wbKeyAct(\'' + k.id + '\',\'del\')">删除</button></td>'
+				+ '<td data-l="名称">' + esc(k.name || "未命名") + '<div class="wb-note wb-mono">' + esc(k.prefix) + "…</div></td>"
+				+ '<td data-l="状态">' + st + "</td>"
+				+ '<td data-l="有效期">' + (k.expires_at ? ts(k.expires_at) : "永久") + "</td>"
+				+ '<td data-l="配额">' + quota + "</td>"
+				+ '<td data-l="限制">' + (lim.length ? esc(lim.join(" · ")) : "不限") + "</td>"
+				+ '<td data-l="最近使用">' + ago(k.last_used_at) + "</td>"
+				+ '<td data-l="操作"><button class="wb-btn mini" onclick="keyAct(\'' + k.id + '\',\'' + (k.enabled ? "disable" : "enable") + '\')">' + (k.enabled ? "停用" : "启用") + "</button> "
+				+ '<button class="wb-btn mini danger" onclick="keyAct(\'' + k.id + '\',\'del\')">删除</button></td>'
 				+ "</tr>";
 		}
 		$("#key_tb").html(html);
 		$("#key_empty").toggle(list.length === 0).text("暂无密钥，点「新建密钥」创建第一把");
 	});
 }
-function wbKeyAct(id, act){
-	if(act === "del" && !confirm("确认删除该密钥？使用该密钥的客户端将立即失效。")) return;
-	wbRun("workbuddy_key", [act, "--id=" + id], {}, "workbuddy_key.json", function(d){
-		wbToast(d.ok ? "操作成功" : ("失败：" + (d.err||"")), d.ok ? "ok" : "err");
+function keyAct(id, act){
+	if(act === "del" && !confirm("确认删除该密钥？使用它的客户端会立即失效。")) return;
+	run(S.key, [act, "--id=" + id], {}, "workbuddy_key.json", function(d){
+		toast(d.ok ? "操作成功" : ("失败：" + (d.err || "")), d.ok ? "ok" : "err");
 		if(d.ok) loadKeys();
 	});
 }
 $("#wb_btn_refresh_key").click(loadKeys);
 $("#wb_btn_add_key").click(function(){
-	wbModal('<h4>新建密钥</h4>'
+	modal("<h4>新建密钥</h4>"
 		+ '<div class="wb-field"><label>名称</label><input class="wb-input" id="nk_name" placeholder="例如：手机"></div>'
 		+ '<div class="wb-field"><label>有效天数</label><input class="wb-input" id="nk_days" value="0" style="max-width:120px"><span class="wb-hint">0=永久</span></div>'
 		+ '<div class="wb-field"><label>最大来源 IP 数</label><input class="wb-input" id="nk_ips" value="0" style="max-width:120px"><span class="wb-hint">24h 内，0=不限</span></div>'
 		+ '<div class="wb-field"><label>IP 白名单</label><input class="wb-input" id="nk_ip" placeholder="192.168.1.0/24，逗号分隔"></div>'
 		+ '<div class="wb-field"><label>模型白名单</label><input class="wb-input" id="nk_models" placeholder="留空=不限"></div>'
 		+ '<div class="wb-field"><label>Token 配额</label><input class="wb-input" id="nk_quota" value="0" style="max-width:160px"><span class="wb-hint">0=不限</span></div>'
-		+ '<div class="wb-modal-foot"><button class="wb-btn" onclick="wbClose()">取消</button><button class="wb-btn primary" id="nk_ok">创建</button></div>');
+		+ '<div class="wb-modal-foot"><button class="wb-btn" onclick="closeModal()">取消</button><button class="wb-btn primary" id="nk_ok">创建</button></div>');
 	$("#nk_ok").click(function(){
-		$(this).prop("disabled", true).text("创建中…");
-		wbRun("workbuddy_key", ["add",
+		var $b = $(this).prop("disabled", true).text("创建中…");
+		run(S.key, ["add",
 			"--name=" + ($("#nk_name").val() || "未命名"),
 			"--days=" + ($("#nk_days").val() || "0"),
 			"--max-ips=" + ($("#nk_ips").val() || "0"),
@@ -702,258 +816,246 @@ $("#wb_btn_add_key").click(function(){
 			"--models=" + ($("#nk_models").val() || ""),
 			"--quota=" + ($("#nk_quota").val() || "0")
 		], {}, "workbuddy_key.json", function(d){
-			if(!d.ok){ wbToast("创建失败：" + (d.err||""), "err"); $("#nk_ok").prop("disabled", false).text("创建"); return; }
-			wbModal('<h4>密钥已创建</h4>'
-				+ '<div class="wb-note">请立即复制保存，关闭后无法再次查看明文。</div>'
-				+ '<div class="wb-code" id="nk_plain">' + esc(d.plaintext) + '</div>'
-				+ '<div class="wb-inline"><button class="wb-btn" onclick="wbCopy(\'nk_plain\')">复制</button></div>'
-				+ '<div class="wb-modal-foot"><button class="wb-btn primary" onclick="wbClose();loadKeys();">我已保存</button></div>');
+			if(!d.ok){
+				$b.prop("disabled", false).text("创建");
+				toast("创建失败：" + (d.err || ""), "err");
+				return;
+			}
+			modal("<h4>密钥已创建</h4>"
+				+ '<div class="wb-note">请立即复制保存 —— 关闭后无法再次查看明文。</div>'
+				+ '<div class="wb-code" id="nk_plain">' + esc(d.plaintext) + "</div>"
+				+ '<div class="wb-inline"><button class="wb-btn" onclick="copyText(\'nk_plain\')">复制</button></div>'
+				+ '<div class="wb-modal-foot"><button class="wb-btn primary" onclick="closeModal();loadKeys();">我已保存</button></div>');
 		});
 	});
 });
 $("#wb_btn_policy").click(function(){
-	wbRun("workbuddy_key", ["policy", "show"], {}, "workbuddy_policy.json", function(d){
+	run(S.key, ["policy", "show"], {}, "workbuddy_policy.json", function(d){
 		var allow = (d.ip_allow || []).join(",");
 		var deny = (d.ip_deny || []).join(",");
-		wbModal('<h4>全局入站 IP 策略</h4>'
+		modal("<h4>全局入站 IP 策略</h4>"
 			+ '<div class="wb-field"><label>白名单</label><input class="wb-input" id="pl_allow" value="' + esc(allow) + '" placeholder="留空=不限制，支持 CIDR"></div>'
 			+ '<div class="wb-field"><label>黑名单</label><input class="wb-input" id="pl_deny" value="' + esc(deny) + '" placeholder="支持 CIDR"></div>'
-			+ '<div class="wb-note">白名单一旦填写，仅放行其中的来源；黑名单优先级更高。</div>'
-			+ '<div class="wb-modal-foot"><button class="wb-btn" onclick="wbClose()">取消</button><button class="wb-btn primary" id="pl_ok">保存</button></div>');
+			+ '<div class="wb-note">白名单一旦填写，只放行其中的来源；黑名单优先级更高。</div>'
+			+ '<div class="wb-modal-foot"><button class="wb-btn" onclick="closeModal()">取消</button><button class="wb-btn primary" id="pl_ok">保存</button></div>');
 		$("#pl_ok").click(function(){
-			wbRun("workbuddy_key", ["policy", "set", "--ip-allow=" + $("#pl_allow").val(), "--ip-deny=" + $("#pl_deny").val()], {}, "workbuddy_policy.json", function(r){
-				wbToast(r.ok ? "已保存" : ("失败：" + (r.err||"")), r.ok ? "ok" : "err");
-				if(r.ok) wbClose();
+			run(S.key, ["policy", "set", "--ip-allow=" + $("#pl_allow").val(), "--ip-deny=" + $("#pl_deny").val()], {}, "workbuddy_policy.json", function(r){
+				toast(r.ok ? "已保存" : ("失败：" + (r.err || "")), r.ok ? "ok" : "err");
+				if(r.ok) closeModal();
 			});
 		});
 	});
 });
 
-/* ---------- 统计与日志 ---------- */
-function kpiCard(label, value, foot){
-	return '<div class="wb-kpi"><div class="k-label">' + label + '</div><div class="k-value">' + value + '</div><div class="k-foot">' + foot + '</div></div>';
+/* ============================ 统计与日志 ============================ */
+function kpi(label, value, foot){
+	return '<div class="wb-kpi"><div class="k-label">' + label + '</div><div class="k-value">' + value + '</div><div class="k-foot">' + foot + "</div></div>";
 }
 function loadStat(){
 	var days = $("#stat_days").val() || "7";
-	wbRun("workbuddy_log", ["stat", "--days=" + days], {}, "workbuddy_log.json", function(d){
-		if(!d.ok){ $("#stat_grid").html('<div class="wb-note">读取失败：' + esc(d.err||"") + '</div>'); return; }
+	run(S.log, ["stat", "--days=" + days], {}, "workbuddy_stat.json", function(d){
+		if(!d.ok){ $("#stat_grid").html('<div class="wb-note">读取失败：' + esc(d.err || "") + "</div>"); return; }
 		var rate = (d.success_rate || 0).toFixed(1) + "%";
 		$("#stat_grid").html(
-			kpiCard("总调用", d.total, "成功 " + d.success + " · 失败 " + (d.total - d.success))
-			+ kpiCard("成功率", rate, "近 " + days + " 天")
-			+ kpiCard("平均首字延迟", (d.avg_first_ms||0) + " ms", "从收到请求到首个字节")
-			+ kpiCard("消耗积分", Math.round(d.credit_total||0), "Token " + (d.prompt_tokens||0) + " → " + (d.comp_tokens||0))
+			kpi("总调用", d.total, "成功 " + d.success + " · 失败 " + (d.total - d.success))
+			+ kpi("成功率", rate, "近 " + days + " 天")
+			+ kpi("平均首字延迟", (d.avg_first_ms || 0) + " ms", "从收到请求到首个字节")
+			+ kpi("消耗积分", Math.round(d.credit_total || 0), "Token " + (d.prompt_tokens || 0) + " → " + (d.comp_tokens || 0))
 		);
-		var top = "";
-		var keys = d.by_key || {}, arr = [];
-		for(var k in keys){ arr.push([k, keys[k]]); }
-		arr.sort(function(a,b){ return b[1]-a[1]; });
-		if(arr.length){
-			var h = '<div class="wb-card" style="margin:0"><h3>按密钥 Top 5</h3><table class="wb-table">';
-			for(var i=0;i<Math.min(5,arr.length);i++){ h += "<tr><td>" + esc(arr[i][0]) + "</td><td>" + arr[i][1] + "</td></tr>"; }
-			h += "</table></div>";
-			top += h;
+		function topBox(title, obj){
+			var arr = [];
+			for(var k in obj){ arr.push([k, obj[k]]); }
+			if(!arr.length) return "";
+			arr.sort(function(a, b){ return b[1] - a[1]; });
+			var h = '<div class="wb-card" style="margin:0"><h3>' + title + '</h3><table class="wb-table">';
+			for(var i = 0; i < Math.min(5, arr.length); i++){ h += "<tr><td>" + esc(arr[i][0] || "(空)") + "</td><td>" + arr[i][1] + "</td></tr>"; }
+			return h + "</table></div>";
 		}
-		var models = d.by_model || {}, marr = [];
-		for(var m in models){ marr.push([m, models[m]]); }
-		marr.sort(function(a,b){ return b[1]-a[1]; });
-		if(marr.length){
-			var h2 = '<div class="wb-card" style="margin:0"><h3>按模型 Top 5</h3><table class="wb-table">';
-			for(var j=0;j<Math.min(5,marr.length);j++){ h2 += "<tr><td>" + esc(marr[j][0]) + "</td><td>" + marr[j][1] + "</td></tr>"; }
-			h2 += "</table></div>";
-			top += h2;
-		}
-		$("#stat_top").html(top);
-		if(days === "1" || days === "2"){ $("#kpi_calls").text(d.total); $("#kpi_calls_foot").text("成功率 " + rate); }
+		$("#stat_top").html(topBox("按密钥 Top 5", d.by_key || {}) + topBox("按模型 Top 5", d.by_model || {}));
 	});
 }
 function loadLog(){
 	var args = ["tail", "--n=" + ($("#log_n").val() || "200"), "--days=" + ($("#log_days").val() || "2")];
 	if($("#log_err").prop("checked")) args.push("--err");
-	wbRun("workbuddy_log", args, {}, "workbuddy_log.json", function(d){
-		if(!d.ok){ $("#log_empty").text("读取失败：" + (d.err||"")).show(); return; }
+	run(S.log, args, {}, "workbuddy_log.json", function(d){
+		if(!d.ok){ $("#log_empty").text("读取失败：" + (d.err || "")).show(); $("#log_tb").html(""); return; }
 		var list = d.records || [], html = "";
-		for(var i=0;i<list.length;i++){
+		for(var i = 0; i < list.length; i++){
 			var r = list[i];
 			var cls = (r.status >= 200 && r.status < 300) ? "b-ok" : "b-err";
-			var credit = (r.credit == undefined || r.credit < 0) ? "—" : r.credit;
+			var credit = (r.credit === undefined || r.credit < 0) ? "—" : r.credit;
 			html += "<tr>"
-				+ '<td data-l="时间">' + ts(r.ts) + '</td>'
-				+ '<td data-l="密钥">' + esc(r.key_name || r.key_id || "-") + '</td>'
-				+ '<td data-l="IP">' + esc(r.ip||"-") + '</td>'
-				+ '<td data-l="模型">' + esc(r.model||"-") + '</td>'
-				+ '<td data-l="状态"><span class="wb-badge ' + cls + '">' + r.status + '</span></td>'
-				+ '<td data-l="首字">' + (r.first_byte_ms||0) + 'ms</td>'
-				+ '<td data-l="耗时">' + (r.total_ms||0) + 'ms</td>'
-				+ '<td data-l="Token">' + (r.prompt_tokens||0) + "+" + (r.completion_tokens||0) + '</td>'
-				+ '<td data-l="积分">' + credit + '</td>'
+				+ '<td data-l="时间">' + ts(r.ts) + "</td>"
+				+ '<td data-l="密钥">' + esc(r.key_name || r.key_id || "-") + "</td>"
+				+ '<td data-l="IP">' + esc(r.ip || "-") + "</td>"
+				+ '<td data-l="模型">' + esc(r.model || "-") + "</td>"
+				+ '<td data-l="状态">' + badge(r.status, cls) + "</td>"
+				+ '<td data-l="首字">' + (r.first_byte_ms || 0) + "ms</td>"
+				+ '<td data-l="耗时">' + (r.total_ms || 0) + "ms</td>"
+				+ '<td data-l="Token">' + (r.prompt_tokens || 0) + "+" + (r.completion_tokens || 0) + "</td>"
+				+ '<td data-l="积分">' + credit + "</td>"
 				+ "</tr>";
 		}
 		$("#log_tb").html(html);
-		$("#log_empty").toggle(list.length === 0)
-			.text(list.length ? "" : (d.limited ? "仅显示最近 " + list.length + " 条" : "暂无调用记录"));
+		$("#log_empty").toggle(list.length === 0).text(list.length ? "" : "暂无调用记录");
 	});
 }
 $("#wb_btn_stat").click(loadStat);
 $("#wb_btn_log").click(loadLog);
 $("#stat_days").change(loadStat);
 $("#wb_btn_log_clean").click(function(){
-	wbRun("workbuddy_log", ["clean"], {}, "workbuddy_log.json", function(d){
-		wbToast(d.ok ? ("已清理 " + d.removed + " 个过期文件") : ("失败：" + (d.err||"")), d.ok ? "ok" : "err");
+	run(S.log, ["clean"], {}, "workbuddy_log.json", function(d){
+		toast(d.ok ? ("已清理 " + d.removed + " 个过期文件") : ("失败：" + (d.err || "")), d.ok ? "ok" : "err");
 	});
 });
 $("#wb_btn_slog").click(function(){
-	wbRun("workbuddy_log", ["service"], {}, "workbuddy_servicelog.json", function(d){
-		$("#servicelog").text((d.lines || []).join("\n") || "（无日志）");
+	run(S.log, ["service"], {}, "workbuddy_servicelog.json", function(d){
+		var lines = (d.lines || []).join("\n");
+		$("#servicelog").text(lines || "（无日志）");
+		if(d.path && !lines) $("#servicelog").text("日志文件：" + d.path + "（暂无内容）");
 	});
 });
 
-/* ---------- 设置 ---------- */
+/* ============================ 设置 ============================ */
+var SET_FIELDS = [
+	"workbuddy_listen_port", "workbuddy_upstream_port", "workbuddy_api_key", "workbuddy_data_dir",
+	"workbuddy_audit_days", "workbuddy_audit_max_mb",
+	"workbuddy_checkin_hours", "workbuddy_travel_hours", "workbuddy_activity_hours",
+	"workbuddy_keepalive_hours", "workbuddy_school_hours", "workbuddy_cat_hours",
+	"workbuddy_max_in_flight", "workbuddy_breaker_threshold", "workbuddy_breaker_cooldown",
+	"workbuddy_breaker_cooldown_max", "workbuddy_soft_rate", "workbuddy_soft_rate_max",
+	"workbuddy_expiring_soon", "workbuddy_sticky_ttl", "workbuddy_timeout", "workbuddy_prompt_mode"
+];
+var SET_SWITCHES = [
+	"workbuddy_auto_start", "workbuddy_wan", "workbuddy_watchdog", "workbuddy_firewall",
+	"workbuddy_checkin_enabled", "workbuddy_travel_enabled", "workbuddy_activity_enabled",
+	"workbuddy_keepalive_enabled", "workbuddy_school_enabled", "workbuddy_cat_enabled",
+	"workbuddy_sticky", "workbuddy_sanitize", "workbuddy_global_enabled"
+];
+var SET_DEFAULTS = {
+	workbuddy_listen_port: "17863", workbuddy_upstream_port: "7863",
+	workbuddy_data_dir: "/koolshare/etc/workbuddy", workbuddy_audit_days: "3", workbuddy_audit_max_mb: "2",
+	workbuddy_checkin_hours: "9,21", workbuddy_travel_hours: "9,21", workbuddy_activity_hours: "10",
+	workbuddy_keepalive_hours: "22", workbuddy_school_hours: "12", workbuddy_cat_hours: "1",
+	workbuddy_max_in_flight: "3", workbuddy_breaker_threshold: "3", workbuddy_breaker_cooldown: "30m",
+	workbuddy_breaker_cooldown_max: "6h", workbuddy_soft_rate: "600s", workbuddy_soft_rate_max: "2h",
+	workbuddy_expiring_soon: "168h", workbuddy_sticky_ttl: "30m", workbuddy_timeout: "120",
+	workbuddy_prompt_mode: "passthrough"
+};
 function fillSettings(){
-	$("#workbuddy_listen_port").val(dv("workbuddy_listen_port","17863"));
-	$("#workbuddy_upstream_port").val(dv("workbuddy_upstream_port","7863"));
-	$("#workbuddy_api_key").val(dv("workbuddy_api_key",""));
-	$("#workbuddy_data_dir").val(dv("workbuddy_data_dir","/koolshare/etc/workbuddy"));
-	$("#workbuddy_audit_days").val(dv("workbuddy_audit_days","3"));
-	$("#workbuddy_audit_max_mb").val(dv("workbuddy_audit_max_mb","2"));
-	setChk("workbuddy_auto_start", dv("workbuddy_auto_start","1"));
-	setChk("workbuddy_wan", dv("workbuddy_wan","0"));
-	setChk("workbuddy_watchdog", dv("workbuddy_watchdog","1"));
-	setChk("workbuddy_firewall", dv("workbuddy_firewall","1"));
-	$("#workbuddy_checkin_hours").val(dv("workbuddy_checkin_hours","9,21"));
-	$("#workbuddy_travel_hours").val(dv("workbuddy_travel_hours","9,21"));
-	$("#workbuddy_activity_hours").val(dv("workbuddy_activity_hours","10"));
-	$("#workbuddy_keepalive_hours").val(dv("workbuddy_keepalive_hours","22"));
-	$("#workbuddy_school_hours").val(dv("workbuddy_school_hours","12"));
-	$("#workbuddy_cat_hours").val(dv("workbuddy_cat_hours","1"));
-	setChk("workbuddy_checkin_enabled", dv("workbuddy_checkin_enabled","1"));
-	setChk("workbuddy_travel_enabled", dv("workbuddy_travel_enabled","1"));
-	setChk("workbuddy_activity_enabled", dv("workbuddy_activity_enabled","1"));
-	setChk("workbuddy_keepalive_enabled", dv("workbuddy_keepalive_enabled","1"));
-	setChk("workbuddy_school_enabled", dv("workbuddy_school_enabled","1"));
-	setChk("workbuddy_cat_enabled", dv("workbuddy_cat_enabled","1"));
-	$("#workbuddy_max_in_flight").val(dv("workbuddy_max_in_flight","3"));
-	$("#workbuddy_breaker_threshold").val(dv("workbuddy_breaker_threshold","3"));
-	$("#workbuddy_breaker_cooldown").val(dv("workbuddy_breaker_cooldown","30m"));
-	$("#workbuddy_breaker_cooldown_max").val(dv("workbuddy_breaker_cooldown_max","6h"));
-	$("#workbuddy_soft_rate").val(dv("workbuddy_soft_rate","600s"));
-	$("#workbuddy_soft_rate_max").val(dv("workbuddy_soft_rate_max","2h"));
-	$("#workbuddy_expiring_soon").val(dv("workbuddy_expiring_soon","168h"));
-	$("#workbuddy_sticky_ttl").val(dv("workbuddy_sticky_ttl","30m"));
-	setChk("workbuddy_sticky", dv("workbuddy_sticky","1"));
-	setChk("workbuddy_sanitize", dv("workbuddy_sanitize","1"));
-	setChk("workbuddy_global_enabled", dv("workbuddy_global_enabled","1"));
-	$("#workbuddy_timeout").val(dv("workbuddy_timeout","120"));
-	$("#workbuddy_prompt_mode").val(dv("workbuddy_prompt_mode","passthrough"));
-	setChk("workbuddy_enable", dv("workbuddy_enable","0"));
+	getDbus(function(m){
+		function val(k){ return (m[k] === undefined || m[k] === "") ? SET_DEFAULTS[k] : m[k]; }
+		for(var i = 0; i < SET_FIELDS.length; i++){ $("#" + SET_FIELDS[i]).val(val(SET_FIELDS[i])); }
+		for(var j = 0; j < SET_SWITCHES.length; j++){ setChk(SET_SWITCHES[j], m[SET_SWITCHES[j]] === undefined ? "1" : m[SET_SWITCHES[j]]); }
+		setChk("workbuddy_enable", m.workbuddy_enable === undefined ? "0" : m.workbuddy_enable);
+		renderDiag();
+	});
 }
 function collectFields(){
 	var f = {};
 	f.workbuddy_enable = chkVal("workbuddy_enable");
-	f.workbuddy_listen_port = $("#workbuddy_listen_port").val();
-	f.workbuddy_upstream_port = $("#workbuddy_upstream_port").val();
-	f.workbuddy_api_key = $("#workbuddy_api_key").val();
-	f.workbuddy_data_dir = $("#workbuddy_data_dir").val();
-	f.workbuddy_audit_days = $("#workbuddy_audit_days").val();
-	f.workbuddy_audit_max_mb = $("#workbuddy_audit_max_mb").val();
-	f.workbuddy_auto_start = chkVal("workbuddy_auto_start");
-	f.workbuddy_wan = chkVal("workbuddy_wan");
-	f.workbuddy_watchdog = chkVal("workbuddy_watchdog");
-	f.workbuddy_firewall = chkVal("workbuddy_firewall");
-	f.workbuddy_checkin_hours = $("#workbuddy_checkin_hours").val();
-	f.workbuddy_travel_hours = $("#workbuddy_travel_hours").val();
-	f.workbuddy_activity_hours = $("#workbuddy_activity_hours").val();
-	f.workbuddy_keepalive_hours = $("#workbuddy_keepalive_hours").val();
-	f.workbuddy_school_hours = $("#workbuddy_school_hours").val();
-	f.workbuddy_cat_hours = $("#workbuddy_cat_hours").val();
-	f.workbuddy_checkin_enabled = chkVal("workbuddy_checkin_enabled");
-	f.workbuddy_travel_enabled = chkVal("workbuddy_travel_enabled");
-	f.workbuddy_activity_enabled = chkVal("workbuddy_activity_enabled");
-	f.workbuddy_keepalive_enabled = chkVal("workbuddy_keepalive_enabled");
-	f.workbuddy_school_enabled = chkVal("workbuddy_school_enabled");
-	f.workbuddy_cat_enabled = chkVal("workbuddy_cat_enabled");
-	f.workbuddy_max_in_flight = $("#workbuddy_max_in_flight").val();
-	f.workbuddy_breaker_threshold = $("#workbuddy_breaker_threshold").val();
-	f.workbuddy_breaker_cooldown = $("#workbuddy_breaker_cooldown").val();
-	f.workbuddy_breaker_cooldown_max = $("#workbuddy_breaker_cooldown_max").val();
-	f.workbuddy_soft_rate = $("#workbuddy_soft_rate").val();
-	f.workbuddy_soft_rate_max = $("#workbuddy_soft_rate_max").val();
-	f.workbuddy_expiring_soon = $("#workbuddy_expiring_soon").val();
-	f.workbuddy_sticky_ttl = $("#workbuddy_sticky_ttl").val();
-	f.workbuddy_sticky = chkVal("workbuddy_sticky");
-	f.workbuddy_sanitize = chkVal("workbuddy_sanitize");
-	f.workbuddy_global_enabled = chkVal("workbuddy_global_enabled");
-	f.workbuddy_timeout = $("#workbuddy_timeout").val();
-	f.workbuddy_prompt_mode = $("#workbuddy_prompt_mode").val();
+	for(var i = 0; i < SET_FIELDS.length; i++){ f[SET_FIELDS[i]] = $("#" + SET_FIELDS[i]).val(); }
+	for(var j = 0; j < SET_SWITCHES.length; j++){ f[SET_SWITCHES[j]] = chkVal(SET_SWITCHES[j]); }
 	return f;
 }
-function validate(f){
-	var ports = ["workbuddy_listen_port","workbuddy_upstream_port"];
-	for(var i=0;i<ports.length;i++){
+function validateSettings(f){
+	var ports = ["workbuddy_listen_port", "workbuddy_upstream_port"];
+	for(var i = 0; i < ports.length; i++){
 		var v = parseInt(f[ports[i]], 10);
-		if(!(v >= 1 && v <= 65535)){ wbToast("端口必须是 1-65535", "err"); return false; }
+		if(!(v >= 1 && v <= 65535)){ toast("端口必须是 1-65535", "err"); return false; }
 	}
-	var hours = ["workbuddy_checkin_hours","workbuddy_travel_hours","workbuddy_activity_hours","workbuddy_keepalive_hours","workbuddy_school_hours","workbuddy_cat_hours"];
-	for(var j=0;j<hours.length;j++){
-		var parts = f[hours[j]].split(",");
-		for(var k=0;k<parts.length;k++){
+	var hours = ["workbuddy_checkin_hours", "workbuddy_travel_hours", "workbuddy_activity_hours",
+		"workbuddy_keepalive_hours", "workbuddy_school_hours", "workbuddy_cat_hours"];
+	for(var j = 0; j < hours.length; j++){
+		var parts = String(f[hours[j]] || "").split(",");
+		for(var k = 0; k < parts.length; k++){
 			var p = $.trim(parts[k]);
 			if(p === "") continue;
 			var n = parseInt(p, 10);
-			if(isNaN(n) || n < 0 || n > 23){ wbToast("定时时刻必须是 0-23 的整数：" + f[hours[j]], "err"); return false; }
+			if(isNaN(n) || n < 0 || n > 23){ toast("定时时刻必须是 0-23 的整数：" + f[hours[j]], "err"); return false; }
 		}
 	}
 	return true;
 }
 $("#wb_btn_save").click(function(){
 	var f = collectFields();
-	if(!validate(f)) return;
-	$(this).prop("disabled", true).text("保存中…");
-	var btn = this;
-	wbPost("workbuddy_config", ["web_submit"], f, function(err){
-		$(btn).prop("disabled", false).text("保存并应用");
-		wbToast(err ? "保存失败" : "已保存并应用", err ? "err" : "ok");
-		setTimeout(function(){ wbGetDbus(fillSettings); loadStatus(); }, 1500);
+	if(!validateSettings(f)) return;
+	var $b = $(this).prop("disabled", true).text("保存中…");
+	run(S.config, ["web_submit"], f, "workbuddy_action.json", function(d){
+		$b.prop("disabled", false).text("保存并应用");
+		toast(d.ok ? "已保存并应用" : ("保存失败：" + (d.err || "")), d.ok ? "ok" : "err");
+		if(d.ok) setTimeout(function(){ fillSettings(); loadStatus(true); loadRuntime(); }, 2500);
 	});
 });
-// 开关直接落库：软件中心判断「插件是否已开启」只看 dbus 的 workbuddy_enable，
-// 卸载前必须先关掉它，否则中心会直接拒绝卸载。所以这里不等「保存并应用」，拨动即生效。
+// 开关拨动即生效：软件中心判断「插件是否已开启」只看 dbus 的 workbuddy_enable，
+// 卸载前必须先关掉它，所以这里不要等「保存并应用」。
 $("#workbuddy_enable").change(function(){
 	var v = chkVal("workbuddy_enable");
 	$(this).prop("disabled", true);
-	wbPost("workbuddy_config", ["web_submit"], {workbuddy_enable: v}, function(err){
+	run(S.config, ["web_submit"], { workbuddy_enable: v }, "workbuddy_action.json", function(d){
 		$("#workbuddy_enable").prop("disabled", false);
-		if(err){ wbToast("切换失败", "err"); return; }
-		wbToast(v === "1" ? "插件已启用" : "插件已关闭，现在可以卸载了", "ok");
-		setTimeout(loadStatus, 2500);
+		if(!d.ok){ toast("切换失败：" + (d.err || ""), "err"); return; }
+		toast(v === "1" ? "插件已启用" : "插件已关闭，现在可以卸载了", "ok");
+		setTimeout(function(){ loadStatus(true); loadRuntime(); }, 2500);
 	});
 });
-$("#wb_btn_start").click(function(){ wbPost("workbuddy_config", ["start"], {workbuddy_enable:"1"}, function(){ wbToast("已启动","ok"); setTimeout(loadStatus, 2500); }); });
-$("#wb_btn_stop").click(function(){ wbPost("workbuddy_config", ["stop"], {workbuddy_enable:"0"}, function(){ wbToast("已停止","ok"); setTimeout(loadStatus, 1200); }); });
-$("#wb_btn_restart").click(function(){ wbPost("workbuddy_config", ["restart"], {}, function(){ wbToast("已重启","ok"); setTimeout(loadStatus, 3000); }); });
+function svcAction(action, fields, tip){
+	run(S.config, [action], fields, "workbuddy_action.json", function(d){
+		toast(d.ok ? tip : (tip + "失败：" + (d.err || "")), d.ok ? "ok" : "err");
+		setTimeout(function(){ loadStatus(true); loadRuntime(); }, 3000);
+	});
+}
+$("#wb_btn_start").click(function(){ $("#workbuddy_enable").prop("checked", true); svcAction("start", { workbuddy_enable: "1" }, "已启动"); });
+$("#wb_btn_stop").click(function(){ $("#workbuddy_enable").prop("checked", false); svcAction("stop", { workbuddy_enable: "0" }, "已停止"); });
+$("#wb_btn_restart").click(function(){ svcAction("restart", {}, "已重启"); });
 $("#wb_btn_migrate").click(function(){
 	var dir = $.trim($("#workbuddy_data_dir").val());
-	if(!dir){ wbToast("请先填写目标目录", "err"); return; }
+	if(!dir){ toast("请先填写目标目录", "err"); return; }
 	if(!confirm("确认把数据目录迁移到 " + dir + " ？迁移后会自动重启服务。")) return;
-	$(this).prop("disabled", true);
-	var btn = this;
-	wbRun("workbuddy_migrate", [dir], {}, "workbuddy_migrate.json", function(d){
-		$(btn).prop("disabled", false);
-		wbToast(d.ok ? "迁移完成，已重启服务" : ("迁移失败：" + (d.err||"")), d.ok ? "ok" : "err");
-		if(d.ok) setTimeout(function(){ wbGetDbus(fillSettings); loadStatus(); }, 2500);
+	var $b = $(this).prop("disabled", true).text("迁移中…");
+	run(S.migrate, [dir], {}, "workbuddy_migrate.json", function(d){
+		$b.prop("disabled", false).text("迁移到该目录");
+		toast(d.ok ? "迁移完成，已重启服务" : ("迁移失败：" + (d.err || "")), d.ok ? "ok" : "err");
+		if(d.ok) setTimeout(function(){ fillSettings(); loadStatus(true); }, 3000);
 	});
 });
-$("#wb_mask").click(function(e){ if(e.target === this) wbClose(); });
+$("#wb_btn_diag").click(function(){
+	DIAG.post = null; DIAG.file = null; DIAG.dbus = null;
+	renderDiag();
+	loadStatus(true);
+	// 再单独摸一次 dbus，把三格都点亮
+	getDbus(function(){ renderDiag(); });
+	toast("正在重新检测三条通道…", "info");
+});
+$("#wb_mask").click(function(e){ if(e.target === this) closeModal(); });
 
-/* ---------- 启动 ---------- */
-wbGetDbus(function(){ fillSettings(); loadStatus(); loadStat(); });
+/* ============================ 标签与自动刷新 ============================ */
+$(".wb-tab").click(function(){
+	$(".wb-tab").removeClass("active");
+	$(this).addClass("active");
+	$(".wb-panel").removeClass("active");
+	$("#" + $(this).attr("data-p")).addClass("active");
+	var p = $(this).attr("data-p");
+	if(p === "p_account") loadAccounts();
+	else if(p === "p_key") loadKeys();
+	else if(p === "p_log"){ loadStat(); loadLog(); }
+	else if(p === "p_set") fillSettings();
+	else loadStatus(true);
+});
 setInterval(function(){
-	// 页面在后台、或上一次请求还没回来（比如正在 OAuth 轮询）就跳过，
-	// 避免和用户操作抢 httpd —— 注意这里是"跳过本次刷新"，不是丢弃用户请求
-	if(document.hidden || wb_busy) return;
-	loadStatus();
-	if($("#p_log").hasClass("active")) loadStat();
+	// 页面在后台、或上一次请求还没回来（比如正在 OAuth 轮询）就跳过本次自动刷新。
+	// 注意：这里只是"跳过刷新"，任何用户点击的请求都一定会发出去。
+	if(document.hidden || BUSY) return;
+	if($("#p_status").hasClass("active")){ loadStatus(true); loadRuntime(); }
+	else if($("#p_account").hasClass("active")) loadAccounts();
+	else if($("#p_log").hasClass("active")) loadStat();
 }, 30000);
+
+/* ============================ 启动 ============================ */
+fillSettings();
+loadStatus(true);
+loadRuntime();
+loadStat();      // 状态页那两个 KPI（今日调用 / 消耗积分）靠它填
 </script>
 </body>
 </html>
