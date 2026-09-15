@@ -99,6 +99,12 @@ wb_out() {
 	echo "${f}"
 }
 
+# wb_result_clear —— 动作开始前清掉上一次的结果。
+# 页面是轮询取结果的，不清的话等待期间会读到「上一次」的旧值，界面会显示错东西。
+wb_result_clear() {
+	dbus set workbuddy_last_result="" >/dev/null 2>&1
+}
+
 # wb_result <文件名> —— 在 wb_out 基础上，把较短的结果同步写进 dbus。
 # 不同固件 httpd 的 /_temp/ 映射目录可能不同（/tmp/upload/、/tmp/、/www/_temp/），
 # 页面若三个文件都取不到，就退回读 dbus 的 workbuddy_last_result，保证关键操作不中断。

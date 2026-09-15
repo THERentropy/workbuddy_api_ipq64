@@ -428,21 +428,39 @@ function wbFetch(name, cb){
 	}
 	tryNext();
 }
+// 脚本是异步执行的（OAuth poll 可能连腾讯轮询几十秒），所以结果要轮询着取：
+//   文件通道可用 → 一直轮询文件，最多 MAX_WAIT 秒
+//   文件通道不可用 → 轮询 dbus（脚本已同步写入 workbuddy_last_result）
+// 注意别只看一次就放弃，否则会读到"上一次"的旧结果。
+var WB_MAX_WAIT_SEC = 45;
 function wbRun(script, params, fields, outFile, cb){
 	wbPost(script, params, fields, function(err){
 		if(err){ cb({"ok":false,"err":"调用 " + script + " 失败"}); return; }
-		setTimeout(function(){
+		var tries = 0;
+		function attempt(){
+			tries++;
 			wbFetch(outFile, function(d){
 				if(d && d.ok){ cb(d); return; }
-				// 兜底：文件取不到时读 dbus（脚本已同步写入 workbuddy_last_result）
-				wbGetDbus(function(){
-					if(dbus_wb && dbus_wb.workbuddy_last_result){
-						try{ cb(JSON.parse(dbus_wb.workbuddy_last_result)); return; }catch(e){}
-					}
-					cb(d);
-				});
+				if(!wbFileOK){
+					// 文件通道不通，改读 dbus
+					wbGetDbus(function(){
+						var s = dbus_wb && dbus_wb.workbuddy_last_result;
+						if(s){
+							try{
+								var o = JSON.parse(s);
+								if(o && o.ok){ cb(o); return; }
+							}catch(e){}
+						}
+						if(tries < WB_MAX_WAIT_SEC){ setTimeout(attempt, 1000); return; }
+						cb(d);
+					});
+					return;
+				}
+				if(tries < WB_MAX_WAIT_SEC){ setTimeout(attempt, 1000); return; }
+				cb(d);
 			});
-		}, 700);
+		}
+		setTimeout(attempt, 700);
 	});
 }
 function wbGetDbus(cb){

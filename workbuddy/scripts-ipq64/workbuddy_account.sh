@@ -19,9 +19,11 @@ action="$1"
 case "${action}" in
 	url|poll)
 		wb_prep wb2api-login >/dev/null
+		wb_result_clear
 		;;
-	signin)
-		wb_prep wb2api-signin >/dev/null
+	signin|remove)
+		[ "${action}" = "signin" ] && wb_prep wb2api-signin >/dev/null
+		wb_result_clear
 		;;
 esac
 
