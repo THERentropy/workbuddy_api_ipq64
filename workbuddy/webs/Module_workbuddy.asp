@@ -398,14 +398,17 @@ function p2(n){ return (n<10?"0":"")+n; }
 function ago(t){ if(!t) return "从未"; var s = Math.floor(Date.now()/1000) - t; if(s<60) return s+" 秒前"; if(s<3600) return Math.floor(s/60)+" 分钟前"; if(s<86400) return Math.floor(s/3600)+" 小时前"; return Math.floor(s/86400)+" 天前"; }
 
 /* ---------- 软件中心 API ---------- */
+// wb_busy 只用来让「自动刷新」避让，绝不用于丢弃请求。
+// 之前写成 if(wb_busy) return —— 请求不发、不报错、不回调，
+// 用户点了按钮会永远卡在「轮询中…」，而且服务端什么都看不到，极难排查。
+var wb_busy = false;
 function wbPost(script, params, fields, cb){
-	if(wb_busy){ return; }
 	wb_busy = true;
 	var postData = {"id": parseInt(Math.random()*100000), "method": script, "params": params || [""], "fields": fields || {}};
 	$.ajax({
 		type: "POST", url: "/_api/", cache: false, dataType: "json",
 		data: JSON.stringify(postData),
-		timeout: 120000,
+		timeout: 300000,   // OAuth poll 最长可能要几分钟
 		complete: function(){ wb_busy = false; },
 		success: function(data){ if(cb) cb(null, data); },
 		error: function(xhr){ if(cb) cb(xhr, null); }
@@ -594,10 +597,15 @@ $("#wb_btn_add_account").click(function(){
 				+ '<a class="wb-btn" target="_blank" href="' + esc(d.url) + '">打开链接</a></div>'
 				+ '<div class="wb-inline" style="margin-top:14px"><button class="wb-btn primary" id="lg_poll">我已完成登录</button></div>');
 			$("#lg_poll").click(function(){
-				$(this).prop("disabled", true).text("轮询中…");
+				var $b = $(this).prop("disabled", true).text("轮询中… 0s");
+				var t0 = new Date().getTime();
+				var tm = setInterval(function(){
+					$b.text("轮询中… " + Math.round((new Date().getTime() - t0) / 1000) + "s");
+				}, 1000);
 				wbRun("workbuddy_account", ["poll", "--realm=" + realm], {}, "workbuddy_login_poll.json", function(r){
+					clearInterval(tm);
 					if(!r.ok){
-						$("#lg_box").append('<div style="margin-top:10px"><span class="wb-badge b-err">' + esc(r.err) + '</span></div>');
+						$("#lg_box").append('<div style="margin-top:10px"><span class="wb-badge b-err">' + esc(r.err || "超时未取到结果，请重试") + '</span></div>');
 						$("#lg_poll").prop("disabled", false).text("重试");
 						return;
 					}
@@ -940,7 +948,9 @@ $("#wb_mask").click(function(e){ if(e.target === this) wbClose(); });
 /* ---------- 启动 ---------- */
 wbGetDbus(function(){ fillSettings(); loadStatus(); loadStat(); });
 setInterval(function(){
-	if(document.hidden) return;
+	// 页面在后台、或上一次请求还没回来（比如正在 OAuth 轮询）就跳过，
+	// 避免和用户操作抢 httpd —— 注意这里是"跳过本次刷新"，不是丢弃用户请求
+	if(document.hidden || wb_busy) return;
 	loadStatus();
 	if($("#p_log").hasClass("active")) loadStat();
 }, 30000);
