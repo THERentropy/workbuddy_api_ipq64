@@ -9,24 +9,40 @@ WB_MODULE=workbuddy
 # 既省闪存空间，又避免 UPX 在 aarch64 静态二进制上的 SIGILL 问题。
 WB_GZ_DIR=/koolshare/bin
 WB_BIN_DIR=/tmp/wb-bin
+WB_SERVICE_LOG=/tmp/workbuddy.log
+WB_TMP_DIR=/tmp
 
-# wb_prep <name> —— 按需把 <name>.gz 解压到运行目录，返回可执行文件路径
+# wb_prep <name> —— 按需把 <name>.gz 解压到运行目录，返回可执行文件路径。
+# 三个关键点（都是被实际故障教育出来的）：
+#   1. 只有解压结果「非空」才替换目标文件 —— 否则 0 字节文件被 chmod 后
+#      会被当成可用二进制，执行时静默无输出，极难排查；
+#   2. gzip / zcat / gunzip 依次尝试 —— 不同固件 busybox 开启的小程序不同；
+#   3. 错误写进服务日志而不是丢进 /dev/null，方便排障。
 wb_prep() {
 	mkdir -p "${WB_BIN_DIR}" 2>/dev/null
 	if [ -f "${WB_GZ_DIR}/$1.gz" ]; then
 		dst="${WB_BIN_DIR}/$1"
-		if [ ! -x "${dst}" ] || [ "${WB_GZ_DIR}/$1.gz" -nt "${dst}" ]; then
-			gzip -dc "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>/dev/null
+		if [ ! -s "${dst}" ] || [ "${WB_GZ_DIR}/$1.gz" -nt "${dst}" ]; then
+			rm -f "${dst}.tmp" 2>/dev/null
+			gzip -dc "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>>"${WB_SERVICE_LOG}" \
+				|| zcat "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>>"${WB_SERVICE_LOG}" \
+				|| gunzip -c "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>>"${WB_SERVICE_LOG}"
 			chmod 0755 "${dst}.tmp" 2>/dev/null
-			mv -f "${dst}.tmp" "${dst}" 2>/dev/null
+			if [ -s "${dst}.tmp" ]; then
+				mv -f "${dst}.tmp" "${dst}" 2>/dev/null
+			else
+				echo "【$(date '+%Y-%m-%d %H:%M:%S')】 解压 $1 失败：输出为空（gzip/zcat/gunzip 均不可用？/tmp 空间不足？）" >> "${WB_SERVICE_LOG}"
+				rm -f "${dst}.tmp" 2>/dev/null
+			fi
 		fi
-		if [ -x "${dst}" ]; then
+		if [ -s "${dst}" ]; then
 			echo "${dst}"
 			return 0
 		fi
 	fi
 	# 兼容未压缩部署（例如手动放置的二进制）
-	if [ -x "${WB_GZ_DIR}/$1" ]; then
+	if [ -s "${WB_GZ_DIR}/$1" ]; then
+		chmod 0755 "${WB_GZ_DIR}/$1" 2>/dev/null
 		echo "${WB_GZ_DIR}/$1"
 		return 0
 	fi
@@ -35,8 +51,6 @@ wb_prep() {
 
 WB_CTL=$(wb_prep wb2api-ctl)
 WB_UPSTREAM_BIN=$(wb_prep wb2api)
-WB_SERVICE_LOG=/tmp/workbuddy.log
-WB_TMP_DIR=/tmp
 # 软件中心的 httpd 把 /_temp/ 映射到 /tmp/upload/（不是 /tmp/！）
 # 参考 rogsoft 的 fakehttp/dockroot 插件：脚本写 /tmp/upload/x.log，页面读 /_temp/x.log
 WB_UPLOAD_DIR=/tmp/upload
