@@ -420,7 +420,9 @@ function wbFetch(name, cb){
 	function tryNext(){
 		if(i >= WB_TEMP_URLS.length){
 			wbFileOK = false;
-			cb({"ok":false, "err":"读取 " + name + " 失败（已尝试 /_temp/、/tmp/，将改用 dbus 通道）"});
+			// fetchfail 标记：用来区分「文件取不到」和「脚本返回了错误」，
+			// 后者是本次动作的真实结论，要立刻展示，不能继续傻等
+			cb({"ok":false, "fetchfail":true, "err":"读取 " + name + " 失败（已尝试 /_temp/、/tmp/）"});
 			return;
 		}
 		var url = WB_TEMP_URLS[i++] + name;
@@ -440,11 +442,14 @@ var WB_MAX_WAIT_SEC = 45;
 function wbRun(script, params, fields, outFile, cb){
 	wbPost(script, params, fields, function(err){
 		if(err){ cb({"ok":false,"err":"调用 " + script + " 失败"}); return; }
+		// 脚本只在结束时写一次结果，且动作开始前已清空，
+		// 所以任何带 ok/err 的对象（只要不是取不到文件的 fetchfail）都是本次结论
+		function accept(o){ return o && (o.ok || (o.err && !o.fetchfail)); }
 		var tries = 0;
 		function attempt(){
 			tries++;
 			wbFetch(outFile, function(d){
-				if(d && d.ok){ cb(d); return; }
+				if(accept(d)){ cb(d); return; }
 				if(!wbFileOK){
 					// 文件通道不通，改读 dbus
 					wbGetDbus(function(){
@@ -452,7 +457,7 @@ function wbRun(script, params, fields, outFile, cb){
 						if(s){
 							try{
 								var o = JSON.parse(s);
-								if(o && o.ok){ cb(o); return; }
+								if(accept(o)){ cb(o); return; }
 							}catch(e){}
 						}
 						if(tries < WB_MAX_WAIT_SEC){ setTimeout(attempt, 1000); return; }

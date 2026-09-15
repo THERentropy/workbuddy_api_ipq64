@@ -14,6 +14,7 @@ if [ -z "${TARGET}" ]; then
 	exit 1
 fi
 
+wb_result_clear workbuddy_migrate.json
 "${WB_CTL}" migrate "$@" | wb_result workbuddy_migrate.json
 
 if grep -q '"ok":true' "$(wb_file workbuddy_migrate.json)" 2>/dev/null; then

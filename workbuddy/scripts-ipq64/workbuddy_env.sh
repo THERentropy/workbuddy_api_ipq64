@@ -50,10 +50,17 @@ wb_prep() {
 			return 0
 		fi
 	fi
-	# 兼容未压缩部署（UPX 包 / 手动放置的 ELF）
+	# 兼容未压缩部署（UPX 包 / 手动放置的 ELF）。
+	# 必须软链一份到 WB_BIN_DIR：wb2api-ctl 是自己按 WB_BIN_DIR 找 login/signin 的，
+	# 只返回 /koolshare/bin 的路径会让它报「二进制不存在: /tmp/wb-bin/wb2api-login」。
 	if [ -s "${WB_GZ_DIR}/$1" ]; then
 		chmod 0755 "${WB_GZ_DIR}/$1" 2>/dev/null
-		echo "${WB_GZ_DIR}/$1"
+		ln -sf "${WB_GZ_DIR}/$1" "${WB_BIN_DIR}/$1" 2>/dev/null
+		if [ -s "${WB_BIN_DIR}/$1" ]; then
+			echo "${WB_BIN_DIR}/$1"
+		else
+			echo "${WB_GZ_DIR}/$1"
+		fi
 		return 0
 	fi
 	echo "${WB_BIN_DIR}/$1"
@@ -105,9 +112,10 @@ wb_out() {
 	echo "${f}"
 }
 
-# wb_result_clear —— 动作开始前清掉上一次的结果。
+# wb_result_clear <文件名> —— 动作开始前清掉上一次的结果（结果文件 + dbus 通道）。
 # 页面是轮询取结果的，不清的话等待期间会读到「上一次」的旧值，界面会显示错东西。
 wb_result_clear() {
+	rm -f "${WB_UPLOAD_DIR}/$1" "${WB_TMP_DIR}/$1" 2>/dev/null
 	dbus set workbuddy_last_result="" >/dev/null 2>&1
 }
 
