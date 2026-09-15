@@ -407,13 +407,24 @@ function wbPost(script, params, fields, cb){
 		error: function(xhr){ if(cb) cb(xhr, null); }
 	});
 }
+// 结果文件的位置：多数固件 httpd 把 /_temp/ 映射到 /tmp/upload/，
+// 少数映射到 /tmp/ 或 /www/_temp/，脚本三处都写，这里按顺序尝试。
+var WB_TEMP_URLS = ["/_temp/", "/tmp/"];
 function wbFetch(name, cb){
-	$.ajax({
-		type: "GET", url: "/_temp/" + name, cache: false, dataType: "json",
-		timeout: 20000,
-		success: function(d){ cb(d); },
-		error: function(){ cb({"ok":false,"err":"读取 /_temp/" + name + " 失败"}); }
-	});
+	var i = 0;
+	function tryNext(){
+		if(i >= WB_TEMP_URLS.length){
+			cb({"ok":false, "err":"读取 " + name + " 失败（已尝试 /_temp/、/tmp/）"});
+			return;
+		}
+		var url = WB_TEMP_URLS[i++] + name;
+		$.ajax({
+			type: "GET", url: url, cache: false, dataType: "json", timeout: 20000,
+			success: function(d){ cb(d); },
+			error: function(){ tryNext(); }
+		});
+	}
+	tryNext();
 }
 function wbRun(script, params, fields, outFile, cb){
 	wbPost(script, params, fields, function(err){

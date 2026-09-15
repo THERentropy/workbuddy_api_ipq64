@@ -16,7 +16,7 @@ fi
 
 "${WB_CTL}" migrate "$@" | wb_out workbuddy_migrate.json
 
-if grep -q '"ok":true' "${WB_TMP_DIR}/workbuddy_migrate.json" 2>/dev/null; then
+if grep -q '"ok":true' "$(wb_file workbuddy_migrate.json)" 2>/dev/null; then
 	dbus set workbuddy_data_dir="${TARGET}"
 	wb_log "数据目录已迁移到 ${TARGET}"
 	/koolshare/scripts/workbuddy_config.sh restart

@@ -10,6 +10,9 @@ WB_CTL=${WB_BIN_DIR}/wb2api-ctl
 WB_UPSTREAM_BIN=${WB_BIN_DIR}/wb2api
 WB_SERVICE_LOG=/tmp/workbuddy.log
 WB_TMP_DIR=/tmp
+# 软件中心的 httpd 把 /_temp/ 映射到 /tmp/upload/（不是 /tmp/！）
+# 参考 rogsoft 的 fakehttp/dockroot 插件：脚本写 /tmp/upload/x.log，页面读 /_temp/x.log
+WB_UPLOAD_DIR=/tmp/upload
 
 # dbus_default <key> <default> —— 读取 dbus，空值回落到默认值
 dbus_default() {
@@ -33,12 +36,21 @@ export WB_LISTEN=":${WB_LISTEN_PORT}"
 export WB_UPSTREAM="http://127.0.0.1:${WB_UPSTREAM_PORT}"
 export WB_AUDIT_DAYS=$(dbus_default workbuddy_audit_days 3)
 export WB_AUDIT_MAX_MB=$(dbus_default workbuddy_audit_max_mb 2)
+export WB_SERVICE_LOG
+export WB_UPLOAD_DIR
 
-# wb_out <文件名> —— 把 stdin 落成 /tmp/<文件名>（httpd 通过 /_temp/ 暴露）。
-# 部分固件把 _temp 放在 /www 下，这里同步一份，保证页面一定能读到。
+# wb_file <文件名> —— 结果文件的真实路径
+wb_file() {
+	echo "${WB_UPLOAD_DIR}/$1"
+}
+
+# wb_out <文件名> —— 把 stdin 落成 /tmp/upload/<文件名>，页面通过 /_temp/<文件名> 读取。
+# 同时在 /tmp 与 /www/_temp（少数固件）各留一份兜底。
 wb_out() {
-	f="${WB_TMP_DIR}/$1"
+	mkdir -p "${WB_UPLOAD_DIR}" 2>/dev/null
+	f="${WB_UPLOAD_DIR}/$1"
 	cat > "${f}"
+	cp -f "${f}" "${WB_TMP_DIR}/$1" 2>/dev/null
 	if [ -d "/www/_temp" ]; then
 		cp -f "${f}" "/www/_temp/$1" 2>/dev/null
 	fi

@@ -23,7 +23,7 @@ case "${action}" in
 		out=workbuddy_login_poll.json
 		"${WB_CTL}" login "$@" | wb_out "${out}"
 		# 落盘成功后重启上游，让新凭证立刻进入账号池
-		if grep -q '"ok":true' "${WB_TMP_DIR}/${out}" 2>/dev/null; then
+		if grep -q '"ok":true' "$(wb_file ${out})" 2>/dev/null; then
 			wb_log "新增/更新账号凭证，重启服务加载"
 			/koolshare/scripts/workbuddy_config.sh restart
 		fi
@@ -31,7 +31,7 @@ case "${action}" in
 	remove|signin)
 		out=workbuddy_action.json
 		"${WB_CTL}" account "$@" | wb_out "${out}"
-		if grep -q '"ok":true' "${WB_TMP_DIR}/${out}" 2>/dev/null; then
+		if grep -q '"ok":true' "$(wb_file ${out})" 2>/dev/null; then
 			/koolshare/scripts/workbuddy_config.sh restart
 		fi
 		;;
