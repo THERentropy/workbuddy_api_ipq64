@@ -10,7 +10,9 @@ alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
 
 module=workbuddy
 PURGE=0
-[ "$1" = "--purge" ] && PURGE=1
+if [ "$1" = "--purge" ]; then
+	PURGE=1
+fi
 
 DATA_DIR=$(dbus get ${module}_data_dir)
 [ -z "${DATA_DIR}" ] && DATA_DIR="/koolshare/etc/${module}"
@@ -31,22 +33,17 @@ iptables -D INPUT -p tcp --dport "${LISTEN_PORT}" -j ACCEPT >/dev/null 2>&1
 iptables -D INPUT -p tcp --dport "${LISTEN_PORT}" -i br0 -j ACCEPT >/dev/null 2>&1
 cru d ${module}_watchdog >/dev/null 2>&1
 
-# ---- 删除文件 ----
-rm -f /koolshare/bin/wb2api*
-rm -rf /tmp/wb-bin
-rm -f /koolshare/res/icon-${module}.png
-rm -f /koolshare/scripts/${module}_config.sh
-rm -f /koolshare/scripts/${module}_status.sh
-rm -f /koolshare/scripts/${module}_account.sh
-rm -f /koolshare/scripts/${module}_key.sh
-rm -f /koolshare/scripts/${module}_log.sh
-rm -f /koolshare/scripts/${module}_migrate.sh
-rm -f /koolshare/scripts/${module}_env.sh
-rm -f /koolshare/scripts/uninstall_${module}.sh
-rm -f /koolshare/webs/Module_${module}.asp
+# ---- 删除文件（用通配符，避免以后新增脚本忘记加进列表）----
+rm -rf /koolshare/bin/wb2api* >/dev/null 2>&1
+rm -rf /tmp/wb-bin >/dev/null 2>&1
+rm -rf /koolshare/res/icon-${module}.png >/dev/null 2>&1
+rm -rf /koolshare/scripts/${module}_* >/dev/null 2>&1
+rm -rf /koolshare/scripts/uninstall_${module}.sh >/dev/null 2>&1
+rm -rf /koolshare/webs/Module_${module}.asp >/dev/null 2>&1
 find /koolshare/init.d -name "*${module}*" | xargs rm -rf >/dev/null 2>&1
-rm -f /tmp/${module}_*.json >/dev/null 2>&1
-rm -f /tmp/${module}.log >/dev/null 2>&1
+# 结果文件在两处：/tmp/upload/（httpd 的 /_temp/）与 /tmp/（兜底副本）
+rm -rf /tmp/${module}_* /tmp/${module}.log >/dev/null 2>&1
+rm -rf /tmp/upload/${module}_* >/dev/null 2>&1
 
 # ---- 清理 dbus ----
 for key in $(dbus list ${module} | cut -d= -f1); do

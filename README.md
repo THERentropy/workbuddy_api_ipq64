@@ -145,6 +145,35 @@ cd /tmp && tar -zxf workbuddy.tar.gz && chmod +x workbuddy/install.sh && sh work
 
 安装脚本会校验平台：必须是存在 `/koolshare`、内核 ≥ 4.1 且 `uname -m` 为 `aarch64/arm64/armv8l` 的机器。
 
+## 卸载
+
+软件中心有一条硬性规则（`ks_app_remove.sh`）：
+
+```sh
+ENABLED=$(dbus get <module>_enable)
+if [ "${ENABLED}" == "1" ]; then
+	echo "插件已经开启！你必须先将其关闭后才能进行卸载操作！"
+	quit_ks_uninstall          # 直接退出，连插件的卸载脚本都不会被调用
+fi
+```
+
+所以**插件处于开启状态时，软件中心根本不会调用本插件的 `uninstall.sh`**，你会看到"卸载了但插件还在"。
+
+正确步骤：
+
+1. 插件页面右上角的开关**拨到关闭**——拨动即生效（会立即写 dbus 并停止服务），不需要再点「保存并应用」
+2. 回软件中心执行卸载
+
+卸载行为：停服务、清 iptables 规则与 watchdog、删除全部文件（`/koolshare/bin/wb2api*`、`/koolshare/scripts/workbuddy_*`、`/tmp/wb-bin`、页面与图标），并清理 `workbuddy_*` 与 `softcenter_module_workbuddy_*` 的 dbus 键。
+
+**数据目录默认保留**（凭证 / 密钥 / 审计日志）。要一并删除：
+
+```sh
+sh /koolshare/scripts/uninstall_workbuddy.sh --purge   # 需在卸载前执行
+# 或卸载后手动
+rm -rf /koolshare/etc/workbuddy
+```
+
 ## 使用
 
 1. 软件中心打开「WorkBuddy 网关」，打开右上角开关，点「启动」。

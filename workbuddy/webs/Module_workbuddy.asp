@@ -358,9 +358,13 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 			</div>
 		</div>
 
-		<div class="wb-inline" style="margin-bottom:30px">
+		<div class="wb-inline" style="margin-bottom:10px">
 			<button class="wb-btn primary" id="wb_btn_save">保存并应用</button>
 			<span class="wb-note">保存后会重新渲染上游配置并重启服务</span>
+		</div>
+		<div class="wb-note" style="margin-bottom:30px">
+			<b>卸载提示：</b>软件中心要求插件处于「已关闭」状态才能卸载。请先拨掉页面右上角的开关（拨动即生效，无需再点保存），
+			再回软件中心执行卸载。数据目录会保留，如需一并删除请先手动 <span class="wb-mono">rm -rf</span>。
 		</div>
 	</div>
 
@@ -897,6 +901,18 @@ $("#wb_btn_save").click(function(){
 		$(btn).prop("disabled", false).text("保存并应用");
 		wbToast(err ? "保存失败" : "已保存并应用", err ? "err" : "ok");
 		setTimeout(function(){ wbGetDbus(fillSettings); loadStatus(); }, 1500);
+	});
+});
+// 开关直接落库：软件中心判断「插件是否已开启」只看 dbus 的 workbuddy_enable，
+// 卸载前必须先关掉它，否则中心会直接拒绝卸载。所以这里不等「保存并应用」，拨动即生效。
+$("#workbuddy_enable").change(function(){
+	var v = chkVal("workbuddy_enable");
+	$(this).prop("disabled", true);
+	wbPost("workbuddy_config", ["web_submit"], {workbuddy_enable: v}, function(err){
+		$("#workbuddy_enable").prop("disabled", false);
+		if(err){ wbToast("切换失败", "err"); return; }
+		wbToast(v === "1" ? "插件已启用" : "插件已关闭，现在可以卸载了", "ok");
+		setTimeout(loadStatus, 2500);
 	});
 });
 $("#wb_btn_start").click(function(){ wbPost("workbuddy_config", ["start"], {workbuddy_enable:"1"}, function(){ wbToast("已启动","ok"); setTimeout(loadStatus, 2500); }); });

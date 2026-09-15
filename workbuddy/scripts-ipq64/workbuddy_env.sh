@@ -12,27 +12,37 @@ WB_BIN_DIR=/tmp/wb-bin
 WB_SERVICE_LOG=/tmp/workbuddy.log
 WB_TMP_DIR=/tmp
 
+# 二进制体积下限（字节）。4 个二进制最小的也有 4.9MB，
+# 低于 1MB 一律视为解压残缺，宁可报错也不要交出半个文件。
+WB_MIN_BIN_SIZE=1048576
+
 # wb_prep <name> —— 按需把 <name>.gz 解压到运行目录，返回可执行文件路径。
-# 三个关键点（都是被实际故障教育出来的）：
-#   1. 只有解压结果「非空」才替换目标文件 —— 否则 0 字节文件被 chmod 后
-#      会被当成可用二进制，执行时静默无输出，极难排查；
-#   2. gzip / zcat / gunzip 依次尝试 —— 不同固件 busybox 开启的小程序不同；
-#   3. 错误写进服务日志而不是丢进 /dev/null，方便排障。
+# 四个关键点（都是被实际故障教育出来的）：
+#   1. gzip / zcat / gunzip 依次尝试 —— 不同固件 busybox 开启的小程序不同；
+#   2. 只有解压结果「非空且体积合理」才替换目标文件 —— 否则 0 字节或截断的文件
+#      被 chmod 后会被当成可用二进制，执行时静默无输出，极难排查；
+#   3. 错误写进服务日志而不是丢进 /dev/null，方便排障；
+#   4. 没有 .gz 就直接用同名 ELF —— 兼容 UPX 包与手动部署。
 wb_prep() {
 	mkdir -p "${WB_BIN_DIR}" 2>/dev/null
 	if [ -f "${WB_GZ_DIR}/$1.gz" ]; then
 		dst="${WB_BIN_DIR}/$1"
-		if [ ! -s "${dst}" ] || [ "${WB_GZ_DIR}/$1.gz" -nt "${dst}" ]; then
+		if [ "${WB_GZ_DIR}/$1.gz" -nt "${dst}" ] || [ ! -f "${dst}" ] \
+			|| [ "$(wc -c < "${dst}" 2>/dev/null)" -lt "${WB_MIN_BIN_SIZE}" ]; then
 			rm -f "${dst}.tmp" 2>/dev/null
 			gzip -dc "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>>"${WB_SERVICE_LOG}" \
 				|| zcat "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>>"${WB_SERVICE_LOG}" \
 				|| gunzip -c "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>>"${WB_SERVICE_LOG}"
-			chmod 0755 "${dst}.tmp" 2>/dev/null
-			if [ -s "${dst}.tmp" ]; then
+			sz=$(wc -c < "${dst}.tmp" 2>/dev/null)
+			[ -z "${sz}" ] && sz=0
+			if [ "${sz}" -ge "${WB_MIN_BIN_SIZE}" ]; then
+				chmod 0755 "${dst}.tmp" 2>/dev/null
 				mv -f "${dst}.tmp" "${dst}" 2>/dev/null
 			else
-				echo "【$(date '+%Y-%m-%d %H:%M:%S')】 解压 $1 失败：输出为空（gzip/zcat/gunzip 均不可用？/tmp 空间不足？）" >> "${WB_SERVICE_LOG}"
+				echo "【$(date '+%Y-%m-%d %H:%M:%S')】 解压 $1 失败：只得到 ${sz} 字节（应 ≥ ${WB_MIN_BIN_SIZE}）。可能 gzip/zcat/gunzip 均不可用，或 /tmp 空间不足。" >> "${WB_SERVICE_LOG}"
 				rm -f "${dst}.tmp" 2>/dev/null
+				echo "${WB_BIN_DIR}/$1"
+				return 1
 			fi
 		fi
 		if [ -s "${dst}" ]; then
@@ -40,7 +50,7 @@ wb_prep() {
 			return 0
 		fi
 	fi
-	# 兼容未压缩部署（例如手动放置的二进制）
+	# 兼容未压缩部署（UPX 包 / 手动放置的 ELF）
 	if [ -s "${WB_GZ_DIR}/$1" ]; then
 		chmod 0755 "${WB_GZ_DIR}/$1" 2>/dev/null
 		echo "${WB_GZ_DIR}/$1"
@@ -92,10 +102,6 @@ wb_out() {
 	f="${WB_UPLOAD_DIR}/$1"
 	cat > "${f}"
 	cp -f "${f}" "${WB_TMP_DIR}/$1" 2>/dev/null
-	# /www 是 httpd 的站点根，写一份到这里可以让 /_temp/<file> 直接命中；
-	# /www 一般在内存盘上，不产生闪存写入。
-	mkdir -p /www/_temp 2>/dev/null
-	cp -f "${f}" "/www/_temp/$1" 2>/dev/null
 	echo "${f}"
 }
 
