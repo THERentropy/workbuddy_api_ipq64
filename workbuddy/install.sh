@@ -130,7 +130,6 @@ install_now() {
 	rm -rf /koolshare/bin/wb2api-ctl >/dev/null 2>&1
 	rm -rf /koolshare/bin/wb2api-login >/dev/null 2>&1
 	rm -rf /koolshare/bin/wb2api-signin >/dev/null 2>&1
-	rm -rf /koolshare/bin/wb2api-credit >/dev/null 2>&1
 	rm -rf /koolshare/res/icon-${module}.png >/dev/null 2>&1
 	rm -rf /koolshare/scripts/${module}_*.sh >/dev/null 2>&1
 	rm -rf /koolshare/scripts/uninstall_${module}.sh >/dev/null 2>&1
@@ -151,7 +150,6 @@ install_now() {
 	chmod 0755 /koolshare/bin/wb2api-ctl >/dev/null 2>&1
 	chmod 0755 /koolshare/bin/wb2api-login >/dev/null 2>&1
 	chmod 0755 /koolshare/bin/wb2api-signin >/dev/null 2>&1
-	chmod 0755 /koolshare/bin/wb2api-credit >/dev/null 2>&1
 	chmod 0755 /koolshare/scripts/${module}_*.sh >/dev/null 2>&1
 	chmod 0755 /koolshare/scripts/uninstall_${module}.sh >/dev/null 2>&1
 
@@ -180,8 +178,9 @@ install_now() {
 	dbus_set_default ${module}_listen_port "17863"
 	dbus_set_default ${module}_upstream_port "7863"
 	dbus_set_default ${module}_data_dir "/koolshare/etc/${module}"
-	dbus_set_default ${module}_audit_days "7"
-	dbus_set_default ${module}_audit_max_mb "8"
+	# 审计日志默认保守：jffs 空间有限，最大约 3×2MB
+	dbus_set_default ${module}_audit_days "3"
+	dbus_set_default ${module}_audit_max_mb "2"
 	dbus_set_default ${module}_max_body_mb "8"
 	dbus_set_default ${module}_soft_rate "600s"
 	dbus_set_default ${module}_soft_rate_max "2h"

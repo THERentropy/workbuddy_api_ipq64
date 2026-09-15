@@ -31,8 +31,8 @@ export WB_UPSTREAM_KEY
 export WB_BIN_DIR
 export WB_LISTEN=":${WB_LISTEN_PORT}"
 export WB_UPSTREAM="http://127.0.0.1:${WB_UPSTREAM_PORT}"
-export WB_AUDIT_DAYS=$(dbus_default workbuddy_audit_days 7)
-export WB_AUDIT_MAX_MB=$(dbus_default workbuddy_audit_max_mb 8)
+export WB_AUDIT_DAYS=$(dbus_default workbuddy_audit_days 3)
+export WB_AUDIT_MAX_MB=$(dbus_default workbuddy_audit_max_mb 2)
 
 # wb_out <文件名> —— 把 stdin 落成 /tmp/<文件名>（httpd 通过 /_temp/ 暴露）。
 # 部分固件把 _temp 放在 /www 下，这里同步一份，保证页面一定能读到。

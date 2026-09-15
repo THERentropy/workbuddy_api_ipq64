@@ -755,8 +755,8 @@ function fillSettings(){
 	$("#workbuddy_upstream_port").val(dv("workbuddy_upstream_port","7863"));
 	$("#workbuddy_api_key").val(dv("workbuddy_api_key",""));
 	$("#workbuddy_data_dir").val(dv("workbuddy_data_dir","/koolshare/etc/workbuddy"));
-	$("#workbuddy_audit_days").val(dv("workbuddy_audit_days","7"));
-	$("#workbuddy_audit_max_mb").val(dv("workbuddy_audit_max_mb","8"));
+	$("#workbuddy_audit_days").val(dv("workbuddy_audit_days","3"));
+	$("#workbuddy_audit_max_mb").val(dv("workbuddy_audit_max_mb","2"));
 	setChk("workbuddy_auto_start", dv("workbuddy_auto_start","1"));
 	setChk("workbuddy_wan", dv("workbuddy_wan","0"));
 	setChk("workbuddy_watchdog", dv("workbuddy_watchdog","1"));

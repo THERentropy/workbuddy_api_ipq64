@@ -64,8 +64,8 @@ func loadEnv() *Env {
 		UpstreamPort: port,
 		UpstreamKey:  os.Getenv("WB_UPSTREAM_KEY"),
 		BinDir:       envStr("WB_BIN_DIR", defaultBinDir),
-		AuditDays:    envInt("WB_AUDIT_DAYS", 7),
-		AuditMaxMB:   envInt("WB_AUDIT_MAX_MB", 8),
+		AuditDays:    envInt("WB_AUDIT_DAYS", 3),
+		AuditMaxMB:   envInt("WB_AUDIT_MAX_MB", 2),
 	}
 }
 

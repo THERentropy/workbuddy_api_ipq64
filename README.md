@@ -50,7 +50,7 @@
 │   ├── version                    插件版本
 │   ├── res/icon-workbuddy.png     软件中心图标
 │   ├── webs/Module_workbuddy.asp  管理页面
-│   ├── bin_64/                    CI 产物落点（wb2api、wb2api-login、wb2api-signin、wb2api-credit、wb2api-ctl）
+│   ├── bin_64/                    CI 产物落点（wb2api、wb2api-login、wb2api-signin、wb2api-ctl）
 │   └── scripts-ipq64/             平台脚本（构建时复制为 scripts/）
 ├── .github/workflows/build-ipq64.yml  交叉编译 + 打包 + Release
 ├── build_ipq64.sh                 打包脚本（对齐 rogsoft 约定）
@@ -64,9 +64,10 @@
 推荐直接用 GitHub Actions：推送或打 tag 后，workflow 会
 
 1. 检出上游 `Sliverkiss/workbuddy2api`（默认 `master`，可手动指定 ref）；
-2. `GOOS=linux GOARCH=arm64 CGO_ENABLED=0` 静态编译 `cmd/server`、`cmd/login`、`cmd/signin`、`cmd/credit`；
+2. `GOOS=linux GOARCH=arm64 CGO_ENABLED=0` 静态编译 `cmd/server`、`cmd/login`、`cmd/signin`；
 3. 编译 `guard/` 为 `wb2api-ctl`；
-4. 执行 `build_ipq64.sh` 产出 `workbuddy.tar.gz`、`version`、`config.json.js`，打 tag 时自动发布 Release。
+4. 用 UPX 压缩全部二进制（约剩 30%）；
+5. 执行 `build_ipq64.sh` 产出 `workbuddy.tar.gz`、`version`、`config.json.js`，打 tag 时自动发布 Release。
 
 本地打包（需 `go` 与 `sh`）：
 
@@ -77,17 +78,42 @@ export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
 go build -trimpath -ldflags="-s -w" -o <仓库>/workbuddy/bin_64/wb2api        ./cmd/server
 go build -trimpath -ldflags="-s -w" -o <仓库>/workbuddy/bin_64/wb2api-login  ./cmd/login
 go build -trimpath -ldflags="-s -w" -o <仓库>/workbuddy/bin_64/wb2api-signin ./cmd/signin
-go build -trimpath -ldflags="-s -w" -o <仓库>/workbuddy/bin_64/wb2api-credit ./cmd/credit
 
 # 2. 编译自研控制二进制
 cd <仓库>/guard && go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-ctl .
 
-# 3. 打包
+# 3. 压缩（强烈建议，否则 jffs 装不下）
+upx --best --lzma <仓库>/workbuddy/bin_64/*
+
+# 4. 打包
 cd <仓库> && sh build_ipq64.sh
 
-# 4. 自检
+# 5. 自检
 sh check.sh
 ```
+
+## 体积
+
+jffs 分区通常只有几十 MB，软件中心的安装空间要求是「解压后大小 + 安装包大小」，所以二进制全部经 UPX 压缩：
+
+| 阶段 | 未压缩 | UPX 后（`--best --lzma`） |
+| --- | --- | --- |
+| wb2api（上游网关） | 6.81 MB | 1.89 MB |
+| wb2api-login | 4.69 MB | 1.40 MB |
+| wb2api-signin | 4.81 MB | 1.46 MB |
+| wb2api-ctl | 5.38 MB | 1.59 MB |
+| **合计** | **21.7 MB** | **6.3 MB** |
+
+最终：解压后约 6.3 MB + 安装包约 6 MB ≈ **12 MB**，相比优化前的 33 MB 需求大幅下降。
+
+已经采取的体积措施：
+
+- 只打包 4 个二进制，未使用的 `cmd/credit`（积分日报）不打包；
+- 全部 `-trimpath -ldflags="-s -w"` 静态编译后再 UPX（约剩 30%）；
+- 审计日志默认改为保留 3 天、单文件 2 MB（jffs 最多约 6 MB），可在设置里调整；
+- 服务日志固定写 `/tmp`（内存盘），不占 jffs。
+
+UPX 的代价是首次启动多约 0.3 秒解压开销，常驻内存不变。若在个别固件上遇到 `wb2api: not found` 之类启动失败，可在 Actions 手动触发时用 `upx=false` 出未压缩版本。
 
 ## 安装
 
@@ -140,9 +166,10 @@ OPENAI_API_KEY=sk-xxxxxxxx   # 插件分发的密钥，不是上游 api_key
 | --- | --- | --- |
 | `wb2api` | 上游 `cmd/server` | 账号池 + OpenAI 协议转换，只监听 127.0.0.1 |
 | `wb2api-login` | 上游 `cmd/login` | OAuth 设备授权的 `url` / `poll` 子命令 |
-| `wb2api-signin` | 上游 `cmd/signin` | 批量手动签到 |
-| `wb2api-credit` | 上游 `cmd/credit` | 积分日报 |
+| `wb2api-signin` | 上游 `cmd/signin` | 批量手动签到（UPX 后仅 1.46 MB，故保留） |
 | `wb2api-ctl` | 本仓库 `guard/` | 代理鉴权网关 + 配置渲染 + 登录编排 + 密钥 + 审计 |
+
+> 上游还有 `cmd/credit`（积分日报），插件页面未使用，为省空间不打包。
 
 ## 合规与免责
 

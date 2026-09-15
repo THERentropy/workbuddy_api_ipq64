@@ -8,7 +8,7 @@
 #   config.json.js     软件中心插件元数据
 #
 # 前置条件：workbuddy/bin_64/ 下需已放好 CI 交叉编译的 arm64 静态二进制
-#   wb2api  wb2api-login  wb2api-signin  wb2api-credit  wb2api-ctl
+#   wb2api  wb2api-login  wb2api-signin  wb2api-ctl（CI 中已用 UPX 压缩）
 # （见 .github/workflows/build-ipq64.yml）
 # ============================================================================
 

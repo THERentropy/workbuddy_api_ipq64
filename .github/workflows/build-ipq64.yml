@@ -11,6 +11,10 @@ on:
         description: "上游 workbuddy2api 的分支 / tag / commit"
         required: false
         default: "master"
+      upx:
+        description: "用 UPX 压缩二进制（约剩 30%，jffs 空间紧张时务必开启）"
+        required: false
+        default: "true"
 
 permissions:
   contents: write
@@ -71,10 +75,11 @@ jobs:
           mkdir -p workbuddy/bin_64
           cd _upstream
           export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
+          # 只编三个：server（网关）、login（OAuth）、signin（手动签到）
+          # credit（积分日报）未被插件页面使用，为省 jffs 空间不打包
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api       ./cmd/server
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-login ./cmd/login
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-signin ./cmd/signin
-          go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-credit ./cmd/credit
 
       - name: 编译自研控制二进制 wb2api-ctl
         run: |
@@ -82,6 +87,26 @@ jobs:
           cd guard
           export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-ctl .
+
+      - name: 安装 UPX
+        if: ${{ github.event.inputs.upx != 'false' }}
+        run: |
+          set -e
+          curl -fsSL -o /tmp/upx.tar.xz https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz
+          tar -xJf /tmp/upx.tar.xz -C /tmp
+          echo "/tmp/upx-4.2.4-amd64_linux" >> $GITHUB_PATH
+
+      - name: UPX 压缩（约剩 30%，路由器首次启动多约 0.3s 解压开销）
+        if: ${{ github.event.inputs.upx != 'false' }}
+        run: |
+          upx --best --lzma workbuddy/bin_64/* \
+            || echo "::warning::UPX 压缩失败，回退使用未压缩二进制"
+
+      - name: 体积报告
+        run: |
+          echo "=== 二进制（解压后占用 jffs 的实际大小）==="
+          du -sh workbuddy/bin_64
+          ls -lh workbuddy/bin_64
 
       - name: 打包离线安装包
         run: |
