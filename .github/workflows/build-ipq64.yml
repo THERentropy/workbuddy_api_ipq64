@@ -98,7 +98,8 @@ jobs:
           set -e
           cd workbuddy/bin_64
           for f in *; do
-            gzip -9 -c "$f" > "$f.gz"
+            # -n：不写入文件名与时间戳，保证同样源码产出同样的包（md5 可复现）
+            gzip -9 -n -c "$f" > "$f.gz"
             rm -f "$f"
           done
           echo "=== 常驻 jffs 的压缩体积 ==="
