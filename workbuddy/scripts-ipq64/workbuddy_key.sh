@@ -15,9 +15,9 @@ source /koolshare/scripts/workbuddy_env.sh
 case "$1" in
 	policy)
 		shift
-		"${WB_CTL}" policy "$@" | wb_out workbuddy_policy.json
+		"${WB_CTL}" policy "$@" | wb_result workbuddy_policy.json
 		;;
 	*)
-		"${WB_CTL}" key "$@" | wb_out workbuddy_key.json
+		"${WB_CTL}" key "$@" | wb_result workbuddy_key.json
 		;;
 esac

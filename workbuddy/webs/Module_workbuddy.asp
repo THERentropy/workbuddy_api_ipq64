@@ -429,7 +429,18 @@ function wbFetch(name, cb){
 function wbRun(script, params, fields, outFile, cb){
 	wbPost(script, params, fields, function(err){
 		if(err){ cb({"ok":false,"err":"调用 " + script + " 失败"}); return; }
-		setTimeout(function(){ wbFetch(outFile, cb); }, 700);
+		setTimeout(function(){
+			wbFetch(outFile, function(d){
+				if(d && d.ok){ cb(d); return; }
+				// 兜底：文件取不到时读 dbus（脚本已同步写入 workbuddy_last_result）
+				wbGetDbus(function(){
+					if(dbus_wb && dbus_wb.workbuddy_last_result){
+						try{ cb(JSON.parse(dbus_wb.workbuddy_last_result)); return; }catch(e){}
+					}
+					cb(d);
+				});
+			});
+		}, 700);
 	});
 }
 function wbGetDbus(cb){

@@ -10,11 +10,11 @@ source /koolshare/scripts/workbuddy_env.sh
 
 TARGET="$1"
 if [ -z "${TARGET}" ]; then
-	echo '{"ok":false,"err":"缺少目标目录"}' | wb_out workbuddy_migrate.json
+	echo '{"ok":false,"err":"缺少目标目录"}' | wb_result workbuddy_migrate.json
 	exit 1
 fi
 
-"${WB_CTL}" migrate "$@" | wb_out workbuddy_migrate.json
+"${WB_CTL}" migrate "$@" | wb_result workbuddy_migrate.json
 
 if grep -q '"ok":true' "$(wb_file workbuddy_migrate.json)" 2>/dev/null; then
 	dbus set workbuddy_data_dir="${TARGET}"

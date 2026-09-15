@@ -57,6 +57,18 @@ wb_out() {
 	echo "${f}"
 }
 
+# wb_result <文件名> —— 在 wb_out 基础上，把较短的结果同步写进 dbus。
+# 不同固件 httpd 的 /_temp/ 映射目录可能不同（/tmp/upload/、/tmp/、/www/_temp/），
+# 页面若三个文件都取不到，就退回读 dbus 的 workbuddy_last_result，保证关键操作不中断。
+wb_result() {
+	f=$(wb_out "$1")
+	sz=$(wc -c < "${f}" 2>/dev/null)
+	if [ -n "$sz" ] && [ "$sz" -lt 4000 ]; then
+		dbus set workbuddy_last_result="$(cat "${f}")" >/dev/null 2>&1
+	fi
+	echo "${f}"
+}
+
 # wb_log <文本> —— 服务日志写 /tmp（内存盘），避免频繁写 jffs。
 wb_log() {
 	echo "【$(date '+%Y-%m-%d %H:%M:%S')】 $*" >> "${WB_SERVICE_LOG}"
