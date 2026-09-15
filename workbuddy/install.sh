@@ -144,6 +144,8 @@ install_now() {
 	cp -rf /tmp/${module}/uninstall.sh /koolshare/scripts/uninstall_${module}.sh
 
 	# ---- 权限 ----
+	# 两种包型都支持：UPX 包是可执行 ELF，gzip 包是 .gz（首次使用时解压到 /tmp）
+	chmod 0755 /koolshare/bin/wb2api* >/dev/null 2>&1
 	chmod 0644 /koolshare/bin/wb2api*.gz >/dev/null 2>&1
 	chmod 0755 /koolshare/scripts/${module}_*.sh >/dev/null 2>&1
 	chmod 0755 /koolshare/scripts/uninstall_${module}.sh >/dev/null 2>&1

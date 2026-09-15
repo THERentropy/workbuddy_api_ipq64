@@ -96,42 +96,43 @@ sh check.sh
 
 jffs 分区通常只有几十 MB，软件中心的安装空间要求是「解压后大小 + 安装包大小」。
 
-### 不要使用 UPX
+### 方案：UPX 4.2.4（默认），gzip 作为回退
 
-aarch64 的**静态**二进制经 UPX 压缩后会崩溃（`Illegal instruction` / SIGILL），这是 UPX 的已知缺陷，与本项目无关：
+aarch64 静态二进制用 UPX 加壳有已知风险（[upx/upx#758](https://github.com/upx/upx/issues/758) 报告 4.2.2 会 SIGILL），所以**版本必须钉死在 4.2.4**，且升级前要在真机复测。
 
-- https://github.com/upx/upx/issues/758 —— 明确指出只有 `-static` 才触发
-- https://github.com/kuoruan/openwrt-upx/issues/6 —— Go 程序在 arm64 路由器上加壳后同样崩溃
+4.2.4 已在目标机型实测通过（TUF_6500 / ARMv8 rev4 / aarch64 / kernel 5.4.277）：
 
-`CGO_ENABLED=0` 编出来的 Go 二进制全是静态链接，正好命中，所以**本项目不使用任何加壳器**。
+| 测试项 | 结果 |
+| --- | --- |
+| `version` / `key list` / `status` | 输出与未压缩版一致 |
+| 连续执行 30 次（退出路径） | 0 次异常退出 |
+| `serve` 长驻 + HTTP + 信号退出 | 正常服务、干净退出 |
+| UPX(ctl) + UPX(login) 走真实 TLS | 成功取到 OAuth 授权链接 |
 
-### 实际方案：gzip 存放，启动时解压到内存盘
+| 二进制 | 原始 | UPX 后 | gzip 后 |
+| --- | --- | --- | --- |
+| wb2api（上游网关） | 6.81 MB | 1.89 MB | 2.76 MB |
+| wb2api-login | 4.69 MB | 1.40 MB | 2.01 MB |
+| wb2api-signin | 4.81 MB | 1.46 MB | 2.09 MB |
+| wb2api-ctl | 5.38 MB | 1.59 MB | 2.29 MB |
+| **合计** | **21.7 MB** | **6.3 MB** | **9.2 MB** |
 
-二进制以 `.gz` 常驻 jffs，服务启动时解压到 `/tmp/wb-bin`（内存盘）运行：
+安装需求（jffs 常驻 + 安装包）：
 
-| 二进制 | 原始 | gzip 后（常驻 jffs） |
-| --- | --- | --- |
-| wb2api（上游网关） | 6.81 MB | ≈ 3.1 MB |
-| wb2api-login | 4.69 MB | ≈ 2.1 MB |
-| wb2api-signin | 4.81 MB | ≈ 2.2 MB |
-| wb2api-ctl | 5.38 MB | ≈ 2.4 MB |
-| **合计** | **21.7 MB** | **≈ 9.8 MB** |
+| 打包方式 | jffs 常驻 | 安装需求 | 运行时额外内存 |
+| --- | --- | --- | --- |
+| **UPX（默认）** | 6.3 MB | **12.7 MB** | 0 |
+| gzip | 8.7 MB | 17.4 MB | ≈ 22 MB（解压到 /tmp） |
 
-最终：jffs 占用约 9.8 MB + 安装包约 9.8 MB ≈ **19.6 MB**（优化前是 33 MB）。
-
-好处：
-
-- 不依赖任何加壳器，没有 SIGILL 风险；
-- 运行时的二进制在内存盘，零闪存写入、零磨损；
-- 换版本时按 mtime 自动重新解压，无需手动清理。
-
-代价：运行时多占约 22 MB 内存，首次解压约 1 秒。
+**脚本同时兼容两种包型**：`wb_prep` 先找 `bin/<name>.gz`（gzip 包）解压到 `/tmp/wb-bin`，找不到就直接用 `bin/<name>`（UPX 包）。要出 gzip 包，在 Actions 手动触发时把 `pack` 填 `gzip`。
 
 其余节流措施：
 
 - 只打包 4 个二进制，未使用的 `cmd/credit`（积分日报）不打包；
 - 审计日志默认 3 天、单文件 2 MB（jffs 最多约 6 MB）；
 - 服务日志固定写 `/tmp`（内存盘），不占 jffs。
+
+> **踩坑记录**：`build_ipq64.sh` 早期版本对所有文件跑 `tr -d '\r'` 统一换行符，会把二进制里的 0x0D 字节全部删掉。ELF 被改坏表现为 `Illegal instruction`，`.gz` 被改坏表现为 `gzip: corrupted data`。现在只对白名单内的文本文件处理，并在打包时校验过二进制逐字节未被改动。
 
 ## 安装
 

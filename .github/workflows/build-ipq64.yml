@@ -12,6 +12,10 @@ on:
         description: "上游 workbuddy2api 的分支 / tag / commit"
         required: false
         default: "master"
+      pack:
+        description: "二进制处理方式：upx=体积小（默认，真机已验证）| gzip=回退，运行时解压到内存盘"
+        required: false
+        default: "upx"
 
 permissions:
   contents: write
@@ -92,11 +96,32 @@ jobs:
           mkdir -p dist
           cp -f workbuddy/bin_64/* dist/
 
-      # 不使用 UPX！aarch64 的静态二进制经 UPX 压缩后会 SIGILL（Illegal instruction）：
-      #   https://github.com/upx/upx/issues/758
-      #   https://github.com/kuoruan/openwrt-upx/issues/6
-      # 改为 gzip 存放：二进制以 .gz 常驻 jffs，服务启动时解压到 /tmp（内存盘）运行。
-      - name: gzip 压缩存放
+      # ⚠️ UPX 版本必须钉死 4.2.4，不要随手升级：
+      #   4.2.2 对 aarch64 静态二进制有 SIGILL 缺陷（https://github.com/upx/upx/issues/758），
+      #   4.2.4 已在 TUF_6500（ARMv8 rev4 / aarch64 / kernel 5.4.277）真机验证通过：
+      #   30 次连续执行 0 异常、serve 长驻与信号退出正常、UPX(ctl)+UPX(login) 走真实 TLS 成功。
+      - name: 安装 UPX 4.2.4
+        if: ${{ github.event.inputs.pack != 'gzip' }}
+        run: |
+          set -e
+          curl -fsSL -o /tmp/upx.tar.xz \
+            https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz
+          tar -xJf /tmp/upx.tar.xz -C /tmp
+          echo "/tmp/upx-4.2.4-amd64_linux" >> $GITHUB_PATH
+
+      - name: UPX 压缩（默认方案）
+        if: ${{ github.event.inputs.pack != 'gzip' }}
+        run: |
+          set -e
+          upx --best --lzma workbuddy/bin_64/*
+          echo "=== 常驻 jffs 的体积 ==="
+          du -sh workbuddy/bin_64
+          ls -lh workbuddy/bin_64
+
+      # 回退方案：GITHUB 手动触发时把 pack 填 gzip。
+      # 二进制以 .gz 常驻 jffs，首次使用时解压到 /tmp（内存盘）运行。
+      - name: gzip 压缩存放（回退方案）
+        if: ${{ github.event.inputs.pack == 'gzip' }}
         run: |
           set -e
           cd workbuddy/bin_64
@@ -105,7 +130,7 @@ jobs:
             gzip -9 -n -c "$f" > "$f.gz"
             rm -f "$f"
           done
-          echo "=== 常驻 jffs 的压缩体积 ==="
+          echo "=== 常驻 jffs 的体积 ==="
           du -sh .
           ls -lh
 
@@ -137,4 +162,7 @@ jobs:
           body: |
             上游 workbuddy2api: ${{ env.UPSTREAM_SHA }} (${{ env.UPSTREAM_DATE }})
             平台: koolshare ipq64 软件中心 (aarch64)
-            说明: 二进制以 gzip 存放，启动时解压到 /tmp 运行（不使用 UPX，避免 aarch64 静态二进制 SIGILL）
+            打包方式: ${{ github.event.inputs.pack || 'upx' }}
+            说明: UPX 4.2.4 已在该机型（TUF_6500 / ARMv8 / aarch64）真机验证；
+                  如需保守方案，可在 Actions 手动触发时把 pack 填 gzip。
+            dist/ 下是未压缩原始二进制，仅供排障时单独下载验证，不进安装包。

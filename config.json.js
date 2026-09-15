@@ -1,6 +1,6 @@
 {
-"version":"1.2.4",
-"md5":"932929d824bc41e25a9e3c42526e4502",
+"version":"1.3.0",
+"md5":"a86e569c0d6f121578d736bc73590f73",
 "home_url":"Module_workbuddy.asp",
 "title":"WorkBuddy 网关",
 "description":"CodeBuddy 账号池转 OpenAI 兼容 API",
@@ -8,5 +8,5 @@
 "author":"ipq64",
 "link":"",
 "changelog":"",
-"build_date":"2026-09-15_19:49:26"
+"build_date":"2026-09-15_21:13:37"
 }
