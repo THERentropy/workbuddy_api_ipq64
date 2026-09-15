@@ -66,7 +66,7 @@
 1. 检出上游 `Sliverkiss/workbuddy2api`（默认 `master`，可手动指定 ref）；
 2. `GOOS=linux GOARCH=arm64 CGO_ENABLED=0` 静态编译 `cmd/server`、`cmd/login`、`cmd/signin`；
 3. 编译 `guard/` 为 `wb2api-ctl`；
-4. 用 UPX 压缩全部二进制（约剩 30%）；
+4. 把二进制 gzip 成 `.gz`（**不要**用 UPX，见「体积」一节）；
 5. 执行 `build_ipq64.sh` 产出 `workbuddy.tar.gz`、`version`、`config.json.js`，打 tag 时自动发布 Release。
 
 本地打包（需 `go` 与 `sh`）：
@@ -82,8 +82,8 @@ go build -trimpath -ldflags="-s -w" -o <仓库>/workbuddy/bin_64/wb2api-signin .
 # 2. 编译自研控制二进制
 cd <仓库>/guard && go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-ctl .
 
-# 3. 压缩（强烈建议，否则 jffs 装不下）
-upx --best --lzma <仓库>/workbuddy/bin_64/*
+# 3. gzip 存放（不要用 UPX，aarch64 静态二进制加壳后会 SIGILL）
+cd <仓库>/workbuddy/bin_64 && for f in *; do gzip -9 -c "$f" > "$f.gz" && rm -f "$f"; done
 
 # 4. 打包
 cd <仓库> && sh build_ipq64.sh
@@ -94,26 +94,44 @@ sh check.sh
 
 ## 体积
 
-jffs 分区通常只有几十 MB，软件中心的安装空间要求是「解压后大小 + 安装包大小」，所以二进制全部经 UPX 压缩：
+jffs 分区通常只有几十 MB，软件中心的安装空间要求是「解压后大小 + 安装包大小」。
 
-| 阶段 | 未压缩 | UPX 后（`--best --lzma`） |
+### 不要使用 UPX
+
+aarch64 的**静态**二进制经 UPX 压缩后会崩溃（`Illegal instruction` / SIGILL），这是 UPX 的已知缺陷，与本项目无关：
+
+- https://github.com/upx/upx/issues/758 —— 明确指出只有 `-static` 才触发
+- https://github.com/kuoruan/openwrt-upx/issues/6 —— Go 程序在 arm64 路由器上加壳后同样崩溃
+
+`CGO_ENABLED=0` 编出来的 Go 二进制全是静态链接，正好命中，所以**本项目不使用任何加壳器**。
+
+### 实际方案：gzip 存放，启动时解压到内存盘
+
+二进制以 `.gz` 常驻 jffs，服务启动时解压到 `/tmp/wb-bin`（内存盘）运行：
+
+| 二进制 | 原始 | gzip 后（常驻 jffs） |
 | --- | --- | --- |
-| wb2api（上游网关） | 6.81 MB | 1.89 MB |
-| wb2api-login | 4.69 MB | 1.40 MB |
-| wb2api-signin | 4.81 MB | 1.46 MB |
-| wb2api-ctl | 5.38 MB | 1.59 MB |
-| **合计** | **21.7 MB** | **6.3 MB** |
+| wb2api（上游网关） | 6.81 MB | ≈ 3.1 MB |
+| wb2api-login | 4.69 MB | ≈ 2.1 MB |
+| wb2api-signin | 4.81 MB | ≈ 2.2 MB |
+| wb2api-ctl | 5.38 MB | ≈ 2.4 MB |
+| **合计** | **21.7 MB** | **≈ 9.8 MB** |
 
-最终：解压后约 6.3 MB + 安装包约 6 MB ≈ **12 MB**，相比优化前的 33 MB 需求大幅下降。
+最终：jffs 占用约 9.8 MB + 安装包约 9.8 MB ≈ **19.6 MB**（优化前是 33 MB）。
 
-已经采取的体积措施：
+好处：
+
+- 不依赖任何加壳器，没有 SIGILL 风险；
+- 运行时的二进制在内存盘，零闪存写入、零磨损；
+- 换版本时按 mtime 自动重新解压，无需手动清理。
+
+代价：运行时多占约 22 MB 内存，首次解压约 1 秒。
+
+其余节流措施：
 
 - 只打包 4 个二进制，未使用的 `cmd/credit`（积分日报）不打包；
-- 全部 `-trimpath -ldflags="-s -w"` 静态编译后再 UPX（约剩 30%）；
-- 审计日志默认改为保留 3 天、单文件 2 MB（jffs 最多约 6 MB），可在设置里调整；
+- 审计日志默认 3 天、单文件 2 MB（jffs 最多约 6 MB）；
 - 服务日志固定写 `/tmp`（内存盘），不占 jffs。
-
-UPX 的代价是首次启动多约 0.3 秒解压开销，常驻内存不变。若在个别固件上遇到 `wb2api: not found` 之类启动失败，可在 Actions 手动触发时用 `upx=false` 出未压缩版本。
 
 ## 安装
 

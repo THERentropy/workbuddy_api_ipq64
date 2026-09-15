@@ -11,10 +11,6 @@ on:
         description: "上游 workbuddy2api 的分支 / tag / commit"
         required: false
         default: "master"
-      upx:
-        description: "用 UPX 压缩二进制（约剩 30%，jffs 空间紧张时务必开启）"
-        required: false
-        default: "true"
 
 permissions:
   contents: write
@@ -37,7 +33,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: '1.22.5'
 
       - name: guard 静态检查
         run: |
@@ -54,7 +50,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: '1.22.5'
 
       - name: 检出上游 workbuddy2api
         uses: actions/checkout@v4
@@ -88,33 +84,34 @@ jobs:
           export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-ctl .
 
-      - name: 安装 UPX
-        if: ${{ github.event.inputs.upx != 'false' }}
+      - name: 留存未压缩副本（排障时可单独下载验证，不进安装包）
+        run: |
+          mkdir -p dist
+          cp -f workbuddy/bin_64/* dist/
+
+      # 不使用 UPX！aarch64 的静态二进制经 UPX 压缩后会 SIGILL（Illegal instruction）：
+      #   https://github.com/upx/upx/issues/758
+      #   https://github.com/kuoruan/openwrt-upx/issues/6
+      # 改为 gzip 存放：二进制以 .gz 常驻 jffs，服务启动时解压到 /tmp（内存盘）运行。
+      - name: gzip 压缩存放
         run: |
           set -e
-          curl -fsSL -o /tmp/upx.tar.xz https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz
-          tar -xJf /tmp/upx.tar.xz -C /tmp
-          echo "/tmp/upx-4.2.4-amd64_linux" >> $GITHUB_PATH
-
-      - name: UPX 压缩（约剩 30%，路由器首次启动多约 0.3s 解压开销）
-        if: ${{ github.event.inputs.upx != 'false' }}
-        run: |
-          upx --best --lzma workbuddy/bin_64/* \
-            || echo "::warning::UPX 压缩失败，回退使用未压缩二进制"
-
-      - name: 体积报告
-        run: |
-          echo "=== 二进制（解压后占用 jffs 的实际大小）==="
-          du -sh workbuddy/bin_64
-          ls -lh workbuddy/bin_64
+          cd workbuddy/bin_64
+          for f in *; do
+            gzip -9 -c "$f" > "$f.gz"
+            rm -f "$f"
+          done
+          echo "=== 常驻 jffs 的压缩体积 ==="
+          du -sh .
+          ls -lh
 
       - name: 打包离线安装包
         run: |
           set -e
           chmod +x build_ipq64.sh
           ./build_ipq64.sh
+          echo "=== 安装包 ==="
           ls -lh workbuddy.tar.gz
-          file workbuddy/bin_64/* || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -132,6 +129,8 @@ jobs:
             workbuddy.tar.gz
             version
             config.json.js
+            dist/*
           body: |
             上游 workbuddy2api: ${{ env.UPSTREAM_SHA }} (${{ env.UPSTREAM_DATE }})
             平台: koolshare ipq64 软件中心 (aarch64)
+            说明: 二进制以 gzip 存放，启动时解压到 /tmp 运行（不使用 UPX，避免 aarch64 静态二进制 SIGILL）

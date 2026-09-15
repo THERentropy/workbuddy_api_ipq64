@@ -32,10 +32,8 @@ iptables -D INPUT -p tcp --dport "${LISTEN_PORT}" -i br0 -j ACCEPT >/dev/null 2>
 cru d ${module}_watchdog >/dev/null 2>&1
 
 # ---- 删除文件 ----
-rm -f /koolshare/bin/wb2api
-rm -f /koolshare/bin/wb2api-ctl
-rm -f /koolshare/bin/wb2api-login
-rm -f /koolshare/bin/wb2api-signin
+rm -f /koolshare/bin/wb2api*
+rm -rf /tmp/wb-bin
 rm -f /koolshare/res/icon-${module}.png
 rm -f /koolshare/scripts/${module}_config.sh
 rm -f /koolshare/scripts/${module}_status.sh

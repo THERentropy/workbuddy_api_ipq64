@@ -125,11 +125,9 @@ install_now() {
 		sh /koolshare/scripts/${module}_config.sh stop >/dev/null 2>&1
 	fi
 
-	# ---- 清理旧文件 ----
-	rm -rf /koolshare/bin/wb2api >/dev/null 2>&1
-	rm -rf /koolshare/bin/wb2api-ctl >/dev/null 2>&1
-	rm -rf /koolshare/bin/wb2api-login >/dev/null 2>&1
-	rm -rf /koolshare/bin/wb2api-signin >/dev/null 2>&1
+	# ---- 清理旧文件（含历史版本的未压缩二进制）----
+	rm -rf /koolshare/bin/wb2api* >/dev/null 2>&1
+	rm -rf /tmp/wb-bin >/dev/null 2>&1
 	rm -rf /koolshare/res/icon-${module}.png >/dev/null 2>&1
 	rm -rf /koolshare/scripts/${module}_*.sh >/dev/null 2>&1
 	rm -rf /koolshare/scripts/uninstall_${module}.sh >/dev/null 2>&1
@@ -146,10 +144,7 @@ install_now() {
 	cp -rf /tmp/${module}/uninstall.sh /koolshare/scripts/uninstall_${module}.sh
 
 	# ---- 权限 ----
-	chmod 0755 /koolshare/bin/wb2api >/dev/null 2>&1
-	chmod 0755 /koolshare/bin/wb2api-ctl >/dev/null 2>&1
-	chmod 0755 /koolshare/bin/wb2api-login >/dev/null 2>&1
-	chmod 0755 /koolshare/bin/wb2api-signin >/dev/null 2>&1
+	chmod 0644 /koolshare/bin/wb2api*.gz >/dev/null 2>&1
 	chmod 0755 /koolshare/scripts/${module}_*.sh >/dev/null 2>&1
 	chmod 0755 /koolshare/scripts/uninstall_${module}.sh >/dev/null 2>&1
 

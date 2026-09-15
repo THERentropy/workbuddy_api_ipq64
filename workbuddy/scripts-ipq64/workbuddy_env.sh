@@ -5,9 +5,36 @@
 # ============================================================================
 
 WB_MODULE=workbuddy
-WB_BIN_DIR=/koolshare/bin
-WB_CTL=${WB_BIN_DIR}/wb2api-ctl
-WB_UPSTREAM_BIN=${WB_BIN_DIR}/wb2api
+# 二进制以 .gz 常驻 jffs，运行时解压到 /tmp（内存盘）：
+# 既省闪存空间，又避免 UPX 在 aarch64 静态二进制上的 SIGILL 问题。
+WB_GZ_DIR=/koolshare/bin
+WB_BIN_DIR=/tmp/wb-bin
+
+# wb_prep <name> —— 按需把 <name>.gz 解压到运行目录，返回可执行文件路径
+wb_prep() {
+	mkdir -p "${WB_BIN_DIR}" 2>/dev/null
+	if [ -f "${WB_GZ_DIR}/$1.gz" ]; then
+		dst="${WB_BIN_DIR}/$1"
+		if [ ! -x "${dst}" ] || [ "${WB_GZ_DIR}/$1.gz" -nt "${dst}" ]; then
+			gzip -dc "${WB_GZ_DIR}/$1.gz" > "${dst}.tmp" 2>/dev/null
+			chmod 0755 "${dst}.tmp" 2>/dev/null
+			mv -f "${dst}.tmp" "${dst}" 2>/dev/null
+		fi
+		if [ -x "${dst}" ]; then
+			echo "${dst}"
+			return 0
+		fi
+	fi
+	# 兼容未压缩部署（例如手动放置的二进制）
+	if [ -x "${WB_GZ_DIR}/$1" ]; then
+		echo "${WB_GZ_DIR}/$1"
+		return 0
+	fi
+	echo "${WB_BIN_DIR}/$1"
+}
+
+WB_CTL=$(wb_prep wb2api-ctl)
+WB_UPSTREAM_BIN=$(wb_prep wb2api)
 WB_SERVICE_LOG=/tmp/workbuddy.log
 WB_TMP_DIR=/tmp
 # 软件中心的 httpd 把 /_temp/ 映射到 /tmp/upload/（不是 /tmp/！）
