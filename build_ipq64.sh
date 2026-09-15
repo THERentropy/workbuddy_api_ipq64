@@ -49,10 +49,14 @@ rm -rf bin_* scripts-*
 find . -name '.gitkeep' -delete
 
 # 换行符统一为 LF（Windows 检出会带 CRLF，路由器 busybox 无法执行）
-for f in $(find . -type f); do
-	case "$f" in
-		*.png) continue ;;
-	esac
+#
+# ⚠️ 只能对文本文件做这件事。tr -d '\r' 会删掉文件里所有 0x0D 字节，
+#    二进制（ELF / .gz / 图片）被处理后会直接损坏：
+#    ELF 执行时 SIGILL（Illegal instruction），.gz 解压报 corrupted data。
+#    所以这里用白名单，只处理已知的文本文件。
+for f in $(find . -type f -name '*.sh' -o -type f -name '*.asp' -o -type f -name '*.css' \
+	-o -type f -name '*.js' -o -type f -name '*.txt' -o -type f -name '*.conf' \
+	-o -type f -name 'version' -o -type f -name '.valid'); do
 	tr -d '\r' < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
 

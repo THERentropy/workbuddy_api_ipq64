@@ -83,7 +83,9 @@ jobs:
           set -e
           cd guard
           export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
-          go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-ctl .
+          # 版本号从 workbuddy/version 注入，避免和插件版本对不上
+          go build -trimpath -ldflags="-s -w -X main.version=$(cat ../workbuddy/version)" \
+            -o ../workbuddy/bin_64/wb2api-ctl .
 
       - name: 留存未压缩副本（排障时可单独下载验证，不进安装包）
         run: |

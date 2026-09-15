@@ -14,6 +14,17 @@ source /koolshare/scripts/workbuddy_env.sh
 
 action="$1"
 
+# 用到的二进制按需解压（wb2api-ctl 会去 WB_BIN_DIR 找它们）。
+# 放在这里而不是 wb_env 里，是为了不让没用到的二进制白占内存。
+case "${action}" in
+	url|poll)
+		wb_prep wb2api-login >/dev/null
+		;;
+	signin)
+		wb_prep wb2api-signin >/dev/null
+		;;
+esac
+
 case "${action}" in
 	url)
 		out=workbuddy_login_url.json
