@@ -3,6 +3,7 @@ name: build-ipq64
 on:
   push:
     branches: [main, master]
+    tags: ["v*"]        # 打 tag 才发布 Release，别漏
   pull_request:
     branches: [main, master]
   workflow_dispatch:
