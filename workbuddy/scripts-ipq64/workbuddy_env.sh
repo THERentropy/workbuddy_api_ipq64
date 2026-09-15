@@ -174,13 +174,18 @@ wb_result_clear() {
 
 # wb_result <文件名> —— 在 wb_out 基础上，把较短的结果同步写进 dbus。
 # 不同固件 httpd 的 /_temp/ 映射目录可能不同（/tmp/upload/、/tmp/、/www/_temp/），
-# 页面若三个文件都取不到，就退回读 dbus 的 workbuddy_last_result，保证关键操作不中断。
+# 页面若都取不到，就退回读 dbus 的 workbuddy_last_result，保证关键操作不中断。
+#
+# ★★ 必须 base64 后再写 dbus：软件中心读 dbus 的接口（GET /_api/<模块名>）
+#    在拼 JSON 时不转义值里的引号。结果本身就是 JSON、满身引号，直接写进去
+#    会把整段响应撑成非法 JSON，页面报「dbus 不可用」，连设置表单都读不出来。
+#    base64 后只有 [A-Za-z0-9+/=]，从根上不可能再出现这个问题。
 wb_result() {
 	wb_out "$1"
 	f=$(wb_file "$1")
 	sz=$(wc -c < "${f}" 2>/dev/null)
-	if [ -n "$sz" ] && [ "$sz" -lt 4000 ]; then
-		dbus set workbuddy_last_result="$(cat "${f}")" >/dev/null 2>&1
+	if [ -n "$sz" ] && [ "$sz" -lt 2000 ]; then
+		dbus set workbuddy_last_result="$(base64 < "${f}" 2>/dev/null | tr -d '\n')" >/dev/null 2>&1
 	fi
 }
 

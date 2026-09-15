@@ -504,12 +504,52 @@ function fetchFile(name, cb){
 	});
 }
 
+// dbus 读接口返回的是 {"result":[{ "k":"v" , "k2":"v2" ... }]}，
+// 每个键一行、以逗号开头。
+// ★★ 绝对不能用 JSON.parse 整体解析：软件中心拼这段 JSON 时「不转义」值里的
+//    引号，只要有一个值含 "（动作结果、用户在「客户端名称」里打的双引号……），
+//    整段就成了非法 JSON —— 表现就是诊断面板「dbus 不可用」，
+//    而且连设置表单都读不出来（一个字符搞瘫整条通道）。
+//    所以按行容错解析：某个值里有多少引号都不影响其它键。
+function parseDbus(txt){
+	var out = {}, key = null;
+	String(txt || "").split(/\r?\n/).forEach(function(raw){
+		var line = raw.replace(/^[\s,]+/, "").replace(/\s+$/, "");
+		if(!line){ return; }
+		line = line.replace(/^\{\s*"result"\s*:\s*\[\s*\{/, "").replace(/\s*\}\s*\]\s*\}\s*$/, "");
+		if(!line){ return; }
+		var i = line.indexOf('":"');
+		if(i < 0){
+			// 值里有换行，续接到上一个键
+			if(key){ out[key] += "\n" + line.replace(/^"/, ""); }
+			return;
+		}
+		key = line.substring(0, i).replace(/^"/, "");
+		out[key] = line.substring(i + 3).replace(/"$/, "");
+	});
+	return out;
+}
+
+// base64 → UTF-8 字符串（脚本写 dbus 时做了 base64，见 wb_result）
+function b64DecodeUtf8(s){
+	try{
+		return decodeURIComponent(Array.prototype.map.call(atob(String(s)), function(c){
+			return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+		}).join(""));
+	}catch(e){ return ""; }
+}
+
 function getDbus(cb){
 	$.ajax({
-		type: "GET", url: "/_api/workbuddy", dataType: "json", cache: false, timeout: 15000,
-		success: function(d){
-			CACHE.dbus = (d && d.result && d.result[0]) ? d.result[0] : {};
-			DIAG.dbus = true;
+		// 按文本收，自己解析；dataType:"json" 会因为一个引号直接报错
+		type: "GET", url: "/_api/workbuddy", dataType: "text", cache: false, timeout: 15000,
+		success: function(txt){
+			var m = parseDbus(txt);
+			var n = 0, k;
+			for(k in m){ if(m.hasOwnProperty(k)){ n++; } }
+			CACHE.dbus = m;
+			// 一个键都没解析出来，说明接口没真正返回数据
+			DIAG.dbus = (n > 0);
 			cb(CACHE.dbus);
 		},
 		error: function(){ DIAG.dbus = false; cb({}); }
@@ -533,12 +573,12 @@ function run(script, params, fields, outFile, cb){
 					// 文件通道不通，用 dbus 兜底（脚本同时写了一份）
 					getDbus(function(m){
 						var s = m && m.workbuddy_last_result;
+						var o = null;
 						if(s){
-							try{
-								var o = JSON.parse(s);
-								if(o && (o.ok || o.err)){ cb(o); return; }
-							}catch(e){}
+							try{ o = JSON.parse(b64DecodeUtf8(s)); }catch(e){}
+							if(!o){ try{ o = JSON.parse(s); }catch(e2){} }   // 兼容旧版明文写法
 						}
+						if(o && (o.ok || o.err)){ cb(o); return; }
 						next();
 					});
 					return;
