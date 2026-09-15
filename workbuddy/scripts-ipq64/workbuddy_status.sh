@@ -45,3 +45,5 @@ printf '{"ok":true,"enable":"%s","upstream_pid":"%s","ctl_pid":"%s","listen_port
 	"$(dbus get workbuddy_auto_start)" \
 	"$(dbus get workbuddy_wan)" \
 	"$(dbus_default workbuddy_watchdog 1)" | wb_out workbuddy_runtime.json
+
+wb_respond

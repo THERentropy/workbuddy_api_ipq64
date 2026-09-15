@@ -23,3 +23,5 @@ case "$1" in
 		"${WB_CTL}" key "$@" | wb_result workbuddy_key.json
 		;;
 esac
+
+wb_respond

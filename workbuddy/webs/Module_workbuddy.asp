@@ -457,16 +457,29 @@ function chkVal(id){ return $("#" + id).prop("checked") ? "1" : "0"; }
 function setChk(id, v){ $("#" + id).prop("checked", (v === "1" || v === 1 || v === true)); }
 
 /* ============================ 通道层 ============================ */
-// POST /_api/：成功时中心回 {"result": <我们发去的 id>}
+// POST /_api/：脚本执行完会回 {"result": <我们发去的 id>}
+// ★ 这里刻意不用 dataType:"json"：脚本的输出可能夹带别的行（日志、路径等），
+//   整体不是合法 JSON 时 jQuery 会走 error 回调，把已经成功的动作误判为失败。
+//   所以按文本收，再宽松解析；解析不出来也不下结论，交给结果文件判断。
 function post(script, params, fields, cb){
 	var id = Math.floor(Math.random() * 100000000);
 	var body = { "id": id, "method": script, "params": params || [""], "fields": fields || {} };
 	$.ajax({
-		type: "POST", url: "/_api/", dataType: "json", cache: false,
+		type: "POST", url: "/_api/", dataType: "text", cache: false,
 		data: JSON.stringify(body), timeout: 300000,
-		success: function(r){
-			DIAG.post = (r && r.result === id);
-			if(r && r.result === -403){ DIAG.post = false; cb("会话失效（/_api/ 返回 -403），请重新登录路由器后再试"); return; }
+		success: function(txt){
+			var r = null;
+			try{ r = JSON.parse($.trim(txt)); }
+			catch(e){
+				var m = String(txt).match(/\{\s*"result"\s*:\s*(-?\d+)\s*\}/);
+				if(m){ try{ r = JSON.parse(m[0]); }catch(e2){} }
+			}
+			if(r && r.result === -403){
+				DIAG.post = false;
+				cb("会话失效（/_api/ 返回 -403），请重新登录路由器后再试");
+				return;
+			}
+			DIAG.post = r ? (r.result === id) : null;
 			cb(null);
 		},
 		error: function(xhr){ DIAG.post = false; cb("提交失败：HTTP " + (xhr && xhr.status ? xhr.status : "超时")); }

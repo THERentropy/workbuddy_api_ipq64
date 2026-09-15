@@ -5,6 +5,39 @@
 # ============================================================================
 
 WB_MODULE=workbuddy
+
+# ============================================================================
+# 软件中心 /_api/ 的参数约定（实机验证 + 官方 aliddns_config.sh 印证）
+#
+#   脚本收到的「第一个参数是请求 id」，真正的 params 从 $2 开始：
+#     POST {"id":1234,"method":"workbuddy_account.sh","params":["list"]}
+#       → workbuddy_account.sh 收到：1234 list
+#   官方脚本的写法就是  case $2 in <flag>) http_response "$1" ;; esac
+#
+#   所以每个入口脚本开头都要丢掉这个 id（wb_strip_id），结束时再把 id
+#   回给页面（wb_respond）—— 页面据此确认脚本真的被执行了，而不是静默失败。
+# ============================================================================
+WB_REQ_ID="$1"
+
+# 就地丢掉请求 id。本文件是被各入口脚本 source 的，此时位置参数就是
+# 调用脚本自己的；在 source 上下文里 shift 会直接作用到调用脚本，
+# 所以各脚本不需要再各自处理一次。
+# 判断依据是「第一个参数是纯数字且后面还有参数」，因此手工执行
+# （ssh 里直接跑，如 `workbuddy_account.sh url --realm=cn`）不受影响。
+if [ $# -ge 2 ]; then
+	case "$1" in
+		'' | *[!0-9]*) ;;
+		*) shift ;;
+	esac
+fi
+
+# wb_respond —— 按官方约定把请求 id 回给页面：{"result":<id>}
+wb_respond() {
+	case "${WB_REQ_ID}" in
+		'' | *[!0-9]*) return 0 ;;
+	esac
+	echo "{\"result\":${WB_REQ_ID}}"
+}
 # 二进制以 .gz 常驻 jffs，运行时解压到 /tmp（内存盘）：
 # 既省闪存空间，又避免 UPX 在 aarch64 静态二进制上的 SIGILL 问题。
 WB_GZ_DIR=/koolshare/bin
@@ -103,13 +136,14 @@ wb_file() {
 }
 
 # wb_out <文件名> —— 把 stdin 落成 /tmp/upload/<文件名>，页面通过 /_temp/<文件名> 读取。
-# 同时在 /tmp 与 /www/_temp（少数固件）各留一份兜底。
+# 同时在 /tmp 留一份兜底。
+# ★ 不要往 stdout 写任何东西：/_api/ 的响应体只能是结尾的 {"result":<id>}，
+#   多一行路径就不是合法 JSON，页面会判定请求失败。
 wb_out() {
 	mkdir -p "${WB_UPLOAD_DIR}" 2>/dev/null
 	f="${WB_UPLOAD_DIR}/$1"
 	cat > "${f}"
 	cp -f "${f}" "${WB_TMP_DIR}/$1" 2>/dev/null
-	echo "${f}"
 }
 
 # wb_result_clear <文件名> —— 动作开始前清掉上一次的结果（结果文件 + dbus 通道）。
@@ -123,12 +157,12 @@ wb_result_clear() {
 # 不同固件 httpd 的 /_temp/ 映射目录可能不同（/tmp/upload/、/tmp/、/www/_temp/），
 # 页面若三个文件都取不到，就退回读 dbus 的 workbuddy_last_result，保证关键操作不中断。
 wb_result() {
-	f=$(wb_out "$1")
+	wb_out "$1"
+	f=$(wb_file "$1")
 	sz=$(wc -c < "${f}" 2>/dev/null)
 	if [ -n "$sz" ] && [ "$sz" -lt 4000 ]; then
 		dbus set workbuddy_last_result="$(cat "${f}")" >/dev/null 2>&1
 	fi
-	echo "${f}"
 }
 
 # wb_log <文本> —— 服务日志写 /tmp（内存盘），避免频繁写 jffs。

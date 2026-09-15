@@ -18,3 +18,5 @@ case "$1" in
 		"${WB_CTL}" log "$@" | wb_out workbuddy_log.json
 		;;
 esac
+
+wb_respond

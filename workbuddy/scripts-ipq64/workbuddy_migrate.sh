@@ -24,3 +24,5 @@ if grep -q '"ok":true' "$(wb_file workbuddy_migrate.json)" 2>/dev/null; then
 else
 	wb_log "数据目录迁移失败：${TARGET}"
 fi
+
+wb_respond

@@ -34,7 +34,10 @@ iptables_del() {
 # wb2api-ctl 会保留未知字段，升级上游后新增配置不会被抹掉。
 render_config() {
 	mkdir -p "${WB_DATA_DIR}"
+	# 输出重定向到服务日志：/_api/ 的响应体只能是结尾的 {"result":<id>}，
+	# 让 cfg render 的 JSON 漏到 stdout 会把响应体变成非法 JSON
 	"${WB_CTL}" cfg render \
+		>>"${WB_SERVICE_LOG}" 2>&1 \
 		"--upstream-port=${WB_UPSTREAM_PORT}" \
 		"--api-key=${WB_UPSTREAM_KEY}" \
 		"--max-body-mb=$(dbus_default workbuddy_max_body_mb 8)" \
@@ -141,9 +144,9 @@ web_submit() {
 		stop
 	fi
 	if [ "$(dbus_default workbuddy_watchdog 1)" = "1" ]; then
-		cru a workbuddy_watchdog "*/5 * * * * /koolshare/scripts/workbuddy_config.sh watchdog"
+		cru a workbuddy_watchdog "*/5 * * * * /koolshare/scripts/workbuddy_config.sh watchdog" >/dev/null 2>&1
 	else
-		cru d workbuddy_watchdog
+		cru d workbuddy_watchdog >/dev/null 2>&1
 	fi
 	echo "{\"ok\":true}" | wb_out workbuddy_action.json
 }
@@ -172,3 +175,5 @@ case "$1" in
 		exit 1
 		;;
 esac
+
+wb_respond

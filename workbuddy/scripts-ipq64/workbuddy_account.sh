@@ -61,3 +61,5 @@ case "${action}" in
 		"${WB_CTL}" account "$@" | wb_result "${out}"
 		;;
 esac
+
+wb_respond
