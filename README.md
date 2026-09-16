@@ -61,12 +61,12 @@
 
 ## 编译与打包
 
-推荐直接用 GitHub Actions：推送或打 tag 后，workflow 会
+推荐复刻后直接用 GitHub Actions：推送或打 tag 后，workflow 会
 
 1. 检出上游 `Sliverkiss/workbuddy2api`（默认 `master`，可手动指定 ref）；
 2. `GOOS=linux GOARCH=arm64 CGO_ENABLED=0` 静态编译 `cmd/server`、`cmd/login`、`cmd/signin`；
 3. 编译 `guard/` 为 `wb2api-ctl`；
-4. 把二进制 gzip 成 `.gz`（**不要**用 UPX，见「体积」一节）；
+4. 把二进制 gzip 成 `.gz`；
 5. 执行 `build_ipq64.sh` 产出 `workbuddy.tar.gz`、`version`、`config.json.js`，打 tag 时自动发布 Release。
 
 本地打包（需 `go` 与 `sh`）：
@@ -132,7 +132,6 @@ aarch64 静态二进制用 UPX 加壳有已知风险（[upx/upx#758](https://git
 - 审计日志默认 3 天、单文件 2 MB（jffs 最多约 6 MB）；
 - 服务日志固定写 `/tmp`（内存盘），不占 jffs。
 
-> **踩坑记录**：`build_ipq64.sh` 早期版本对所有文件跑 `tr -d '\r'` 统一换行符，会把二进制里的 0x0D 字节全部删掉。ELF 被改坏表现为 `Illegal instruction`，`.gz` 被改坏表现为 `gzip: corrupted data`。现在只对白名单内的文本文件处理，并在打包时校验过二进制逐字节未被改动。
 
 ## 安装
 
@@ -157,7 +156,7 @@ if [ "${ENABLED}" == "1" ]; then
 fi
 ```
 
-所以**插件处于开启状态时，软件中心根本不会调用本插件的 `uninstall.sh`**，你会看到"卸载了但插件还在"。
+所以**插件处于开启状态时，软件中心根本不会调用本插件的 `uninstall.sh`**。
 
 正确步骤：
 
