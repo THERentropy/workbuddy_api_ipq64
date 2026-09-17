@@ -345,6 +345,15 @@ func (g *guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 上游内嵌面板（panel 版上游）的静态资源匿名放行：HTML / JS 本身不含任何密钥，
+	// 上游也是匿名提供；否则浏览器直接打开 /panel/ 会被下面的密钥校验挡成 401，
+	// 页面根本加载不出来。真正的数据接口 /panel/api/* 仍走下面的插件密钥鉴权
+	// （面板里填任意一把分发密钥即可，转发时会被替换成上游 api_key）。
+	if r.Method == http.MethodGet && (r.URL.Path == "/panel" || r.URL.Path == "/panel/" || r.URL.Path == "/panel/app.js") {
+		g.proxy.ServeHTTP(w, r)
+		return
+	}
+
 	g.reloadIfChanged()
 
 	select {

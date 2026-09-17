@@ -1,5 +1,8 @@
 # workbuddy-ipq64
 
+> 上游：**[linguo2625469/workbuddy2api-panel](https://github.com/linguo2625469/workbuddy2api-panel)**（`main` 分支，`Sliverkiss/workbuddy2api` 的面板增强分支）。
+> 该分支内嵌了 `/panel/` 管理面板与成长任务接口，本插件对接的是这一版。
+
 ## 能做什么
 
 | 能力 | 说明 |
@@ -7,24 +10,34 @@
 | 服务生命周期 | 页面一键启停 / 重启、开机自启、5 分钟看门狗自动拉起 |
 | 端口收敛 | 上游网关固定只监听 `127.0.0.1:7863`，对外只暴露自研代理端口（默认 `17863`） |
 | 网页内加号 | 生成 OAuth 授权链接 → 浏览器登录 → 轮询落盘 `auths/workbuddy-<uid>.json` |
-| 账号池状态 | 展示健康 / 冷却 / 禁用 / 积分 / 有效期，支持手动签到与删除账号 |
+| 账号池状态 | 健康 / 限流冷却 / 积分冷却 / 降权 / 熔断 / 禁用、冷却剩余、成功率、积分与总额度、模型级限额台账、凭证有效期 |
+| 成长任务 | 「成长任务」页扫描全账号待办（成长 17 项 + 开学季），一键排队执行，实时看队列进度 |
+| 刷新余额 | 走上游面板全量查余额（余额恢复的冷却账号自动解冻） |
+| 上游面板入口 | 状态页一键打开上游内嵌 `/panel/`（用任一把分发密钥登录），配置/日志/模型档位一应俱全 |
 | 多密钥分发 | 每把密钥独立有效期、最大 IP 数、IP 白名单、模型白名单、Token 配额；库中仅存 SHA-256，明文只展示一次 |
 | 调用审计 | 记录密钥、来源 IP、模型、状态码、首字延迟、耗时、Token、实际扣费（上游 `usage.credit`），JSONL 按天滚动 |
-| 可视化设置 | 定时任务时刻与开关、并发与熔断、软限流冷却、会话粘性、数据目录迁移等 |
-| 固件皮肤 | 自动适配 asuswrt / rog / tuf / ts 皮肤 |
+| 可视化设置 | 定时任务（含夜猫子 / 余额后台刷新）、并发与熔断降权、软限流冷却、上游三段超时、出站指纹、会话粘性、数据目录迁移等 |
+| 固件皮肤 | 自动适配 asuswrt / rog / tuf / ts 皮肤（主色变量统一，按钮/描边/高亮一起跟随） |
 
 ## 架构
 
 ```
 下游客户端 ──► wb2api-ctl serve :17863  ──► wb2api（上游） 127.0.0.1:7863 ──► CodeBuddy
-               多密钥鉴权·限流·审计            账号池·协议转换
+               多密钥鉴权·限流·审计            账号池·协议转换·内嵌 /panel/
                       │
                       └─► <数据目录>/audit/audit-YYYYMMDD.jsonl
                           <数据目录>/keys.json（SHA-256）
 
 软件中心页面 Module_workbuddy.asp ──► POST /_api/ ──► workbuddy_*.sh ──► wb2api-ctl 子命令
                                   └──► GET /_temp/workbuddy_*.json（脚本输出）
+                                          └─ workbuddy_task.sh ──► wb2api-ctl panel /panel/api/*
 ```
+
+上游内嵌面板的两条通道：
+
+- `GET /panel/`、`GET /panel/app.js`：纯静态资源（不含密钥），代理层匿名放行，浏览器才能打开；
+- `GET/POST /panel/api/*`：仍走本插件的分发密钥鉴权，转发时把 `Authorization` 换成上游 `api_key`，
+  所以面板里填**任一把 `sk-…` 分发密钥**即可管理。
 
 - **为什么要有 `wb2api-ctl`**：上游只支持一个全局 `api_key`，多密钥 / 配额 / 审计无法靠配置实现；同时路由器上既没有 `python3` 也没有 `jq`，用 busybox `sed/awk` 解析 JSON 极易出错。所以用一个 Go 静态二进制同时承担「反向代理鉴权网关 + 所有 JSON 处理」。
 - **流式不破坏**：代理层使用 `FlushInterval: -1` 立即 flush，SSE 原样透传；用量数据靠 64KB 环形缓冲从响应尾部抓取，不缓存整条流。
@@ -42,7 +55,8 @@
 │   ├── keys.go                    多密钥库 + 全局 IP 策略
 │   ├── ipfilter.go                CIDR 解析与匹配
 │   ├── audit.go                   审计写入 / tail / 聚合统计 / 清理
-│   ├── proxy.go                   反向代理：鉴权 → 限流 → 转发 → 审计
+│   ├── proxy.go                   反向代理：鉴权 → 限流 → 转发 → 审计（/panel/ 静态资源匿名放行）
+│   ├── panel.go                   透传上游内嵌面板 /panel/api/*（成长任务扫描 / 队列 / 余额刷新）
 │   └── migrate.go                 数据目录迁移
 ├── workbuddy/                     插件包源（build_ipq64.sh 会渲染成安装包）
 │   ├── .valid                     平台标识，内容为 ipq64
@@ -52,6 +66,7 @@
 │   ├── webs/Module_workbuddy.asp  管理页面
 │   ├── bin_64/                    CI 产物落点（wb2api、wb2api-login、wb2api-signin、wb2api-ctl）
 │   └── scripts-ipq64/             平台脚本（构建时复制为 scripts/）
+│       └── workbuddy_task.sh      成长任务：scan / run / queue
 ├── .github/workflows/build-ipq64.yml  交叉编译 + 打包 + Release
 ├── build_ipq64.sh                 打包脚本（对齐 rogsoft 约定）
 ├── check.sh                       本地自检
@@ -63,17 +78,22 @@
 
 推荐复刻后直接用 GitHub Actions：推送或打 tag 后，workflow 会
 
-1. 检出上游 `Sliverkiss/workbuddy2api`（默认 `master`，可手动指定 ref）；
+1. 检出上游 `linguo2625469/workbuddy2api-panel`（默认 `main`，可手动指定 ref）；
 2. `GOOS=linux GOARCH=arm64 CGO_ENABLED=0` 静态编译 `cmd/server`、`cmd/login`、`cmd/signin`；
 3. 编译 `guard/` 为 `wb2api-ctl`；
 4. 把二进制 gzip 成 `.gz`；
 5. 执行 `build_ipq64.sh` 产出 `workbuddy.tar.gz`、`version`、`config.json.js`，打 tag 时自动发布 Release。
 
+> 上游换过一版：旧上游 `Sliverkiss/workbuddy2api`（`master`）→ 现用面板分支
+> `linguo2625469/workbuddy2api-panel`（`main`）。差异集中在 `internal/panel`（内嵌面板）、
+> 成长任务接口，以及配置键改名（`schedule.cat_*` → `schedule.blackcat_*`、
+> `school_*` 并入签到排程、新增 `schedule.balance_refresh_*` 与 `pool.degrade_*`）。
+
 本地打包（需 `go` 与 `sh`）：
 
 ```sh
 # 1. 编译上游（可按需切换 ref）
-git clone https://github.com/Sliverkiss/workbuddy2api.git /tmp/wb2api && cd /tmp/wb2api
+git clone https://github.com/linguo2625469/workbuddy2api-panel.git /tmp/wb2api && cd /tmp/wb2api
 export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
 go build -trimpath -ldflags="-s -w" -o <仓库>/workbuddy/bin_64/wb2api        ./cmd/server
 go build -trimpath -ldflags="-s -w" -o <仓库>/workbuddy/bin_64/wb2api-login  ./cmd/login
@@ -117,6 +137,10 @@ aarch64 静态二进制用 UPX 加壳有已知风险（[upx/upx#758](https://git
 | wb2api-ctl | 5.38 MB | 1.59 MB | 2.29 MB |
 | **合计** | **21.7 MB** | **6.3 MB** | **9.2 MB** |
 
+> 上表为旧上游实测值。panel 版上游把面板前端（`index.html` + `app.js`）用 `go:embed` 打进
+> `wb2api`，且新增了成长任务 / 开学季逻辑，`wb2api` 会略大于表中数值（其余三个不变）。
+> 具体以 CI 产物为准；两档打包策略与安装空间要求不变。
+
 安装需求（jffs 常驻 + 安装包）：
 
 | 打包方式 | jffs 常驻 | 安装需求 | 运行时额外内存 |
@@ -128,7 +152,7 @@ aarch64 静态二进制用 UPX 加壳有已知风险（[upx/upx#758](https://git
 
 其余节流措施：
 
-- 只打包 4 个二进制，未使用的 `cmd/credit`（积分日报）不打包；
+- 只打包 4 个二进制，未使用的 `cmd/credit`（积分日报）、`cmd/trial`（global 加油包）不打包；
 - 审计日志默认 3 天、单文件 2 MB（jffs 最多约 6 MB）；
 - 服务日志固定写 `/tmp`（内存盘），不占 jffs。
 
@@ -186,6 +210,10 @@ OPENAI_API_KEY=sk-xxxxxxxx   # 插件分发的密钥，不是上游 api_key
 ```
 
 5. 「统计与日志」查看调用量、成功率、首字延迟、消耗积分与逐条审计。
+6. 「成长任务」→「扫描待办」看各账号还没做完的成长/开学季任务 → 选并发 →「一键完成待办」，
+   页面会显示队列进度（账号内串行、账号间并行）。任务是幂等的，重复点不会重复扣资源。
+7. 需要更细的面板操作（模型档位、在线改配置、分频道日志）时，在「状态总览 → 上游内嵌面板」
+   打开 `http://<路由器IP>:17863/panel/`，登录时填任一把 `sk-…` 分发密钥。
 
 ### 数据存放
 
@@ -202,6 +230,7 @@ OPENAI_API_KEY=sk-xxxxxxxx   # 插件分发的密钥，不是上游 api_key
 ├── guard.json      全局 IP 策略
 ├── auths/          账号凭证 workbuddy-<uid>.json（0600）
 ├── data/state.json 上游账号池状态
+├── data/model.json 模型上下文/输出上限缓存（上游按需拉取后原子写回）
 └── audit/          审计日志 audit-YYYYMMDD.jsonl
 ```
 
@@ -211,7 +240,7 @@ OPENAI_API_KEY=sk-xxxxxxxx   # 插件分发的密钥，不是上游 api_key
 
 | 文件 | 来源 | 作用 |
 | --- | --- | --- |
-| `wb2api` | 上游 `cmd/server` | 账号池 + OpenAI 协议转换，只监听 127.0.0.1 |
+| `wb2api` | 上游 `cmd/server` | 账号池 + OpenAI 协议转换 + 内嵌 `/panel/` 面板，只监听 127.0.0.1 |
 | `wb2api-login` | 上游 `cmd/login` | OAuth 设备授权的 `url` / `poll` 子命令 |
 | `wb2api-signin` | 上游 `cmd/signin` | 批量手动签到（UPX 后仅 1.46 MB，故保留） |
 | `wb2api-ctl` | 本仓库 `guard/` | 代理鉴权网关 + 配置渲染 + 登录编排 + 密钥 + 审计 |

@@ -142,27 +142,46 @@ func cfgRender(e *Env, args []string) error {
 	travelH := fs.String("travel-hours", "9,21", "猫猫旅行时刻")
 	activityH := fs.String("activity-hours", "10", "活跃上报时刻")
 	keepaliveH := fs.String("keepalive-hours", "22", "token 保活时刻")
-	schoolH := fs.String("school-hours", "12", "开学季任务时刻")
-	catH := fs.String("cat-hours", "1", "夜猫子任务时刻")
+	blackcatH := fs.String("blackcat-hours", "23", "夜猫子补足时刻")
 
 	checkinOn := fs.Bool("checkin-enabled", true, "签到开关")
 	travelOn := fs.Bool("travel-enabled", true, "猫猫旅行开关")
 	activityOn := fs.Bool("activity-enabled", true, "活跃上报开关")
 	keepaliveOn := fs.Bool("keepalive-enabled", true, "保活开关")
-	schoolOn := fs.Bool("school-enabled", true, "开学季开关")
-	catOn := fs.Bool("cat-enabled", true, "夜猫子开关")
+	blackcatOn := fs.Bool("blackcat-enabled", true, "夜猫子开关")
+
+	// 余额后台刷新（panel 版上游新增）：两次签到之间保持 credits 新鲜，
+	// 余额恢复的冷却账号自动解冻（语义同签到，但不做签到不刷 token）。
+	balanceRefreshOn := fs.Bool("balance-refresh-enabled", true, "余额后台刷新开关")
+	balanceRefreshMin := fs.Int("balance-refresh-minutes", 5, "余额刷新间隔分钟")
 
 	globalOn := fs.Bool("global-enabled", true, "国际版开关")
-	timeout := fs.Int("timeout", 120, "上游超时秒")
-	clientName := fs.String("client-name", "WorkBuddy", "上游 client_name")
+	globalChatBase := fs.String("global-chat-base", "", "国际版上游 base（空=内置默认）")
+	globalBillingBase := fs.String("global-billing-base", "", "国际版 billing base（空=内置默认）")
+
+	timeout := fs.Int("timeout", 120, "上游短 RPC 超时秒")
+	headerTimeout := fs.Int("header-timeout", 120, "聊天首字节超时秒")
+	idleTimeout := fs.Int("idle-timeout", 300, "聊天流空闲超时秒")
+	userAgent := fs.String("user-agent", "", "出站 User-Agent 覆盖（空=上游默认）")
+	clientVersion := fs.String("client-version", "", "出站 UA 的 WorkBuddy 版本段")
+	cliVersion := fs.String("cli-version", "", "出站 UA 的 CLI 版本段")
+	clientName := fs.String("client-name", "WorkBuddy", "上游 client_name（用量归属头）")
+	deviceToken := fs.String("device-token", "", "X-Device-Token 全局兜底")
+	deviceTokenFile := fs.String("device-token-file", "", "device token 文件路径")
+	passthroughIP := fs.Bool("passthrough-ip", false, "透传客户端 IP 给上游")
+
 	sanitize := fs.Bool("sanitize", true, "指纹脱敏")
 	promptMode := fs.String("prompt-mode", "passthrough", "提示词模式 passthrough|custom")
 	promptFile := fs.String("prompt-file", "", "自定义提示词文件")
 
 	maxInFlight := fs.Int("max-in-flight", 3, "单账号最大在途请求")
+	maxInFlightGlobal := fs.Int("max-in-flight-global", 2, "国际版单账号最大在途请求")
 	breakerThreshold := fs.Int("breaker-threshold", 3, "连续失败熔断阈值")
 	breakerCooldown := fs.String("breaker-cooldown", "30m", "熔断冷却")
 	breakerCooldownMax := fs.String("breaker-cooldown-max", "6h", "熔断冷却封顶")
+	degradeThreshold := fs.Int("degrade-threshold", 5, "连败降权阈值")
+	degradeCooldown := fs.String("degrade-cooldown", "10m", "连败降权时长")
+	degradeCooldownMax := fs.String("degrade-cooldown-max", "2h", "连败降权封顶")
 	idleWeight := fs.Float64("idle-weight", 0.5, "闲置补偿权重")
 	idleWeightMax := fs.Float64("idle-weight-max", 5.0, "闲置补偿上限")
 	expiringSoon := fs.String("expiring-soon", "168h", "快过期积分窗口，0 关闭")
@@ -182,9 +201,19 @@ func cfgRender(e *Env, args []string) error {
 	if *maxBodyMB <= 0 || *maxBodyMB > 64 {
 		return fmt.Errorf("请求体上限非法: %d", *maxBodyMB)
 	}
+	if *headerTimeout <= 0 || *headerTimeout > 3600 || *idleTimeout <= 0 || *idleTimeout > 3600 {
+		return fmt.Errorf("上游超时非法: header=%d idle=%d（1-3600 秒）", *headerTimeout, *idleTimeout)
+	}
+	if *balanceRefreshMin <= 0 || *balanceRefreshMin > 1440 {
+		return fmt.Errorf("余额刷新间隔非法: %d 分钟（1-1440）", *balanceRefreshMin)
+	}
+	if *maxInFlightGlobal < 0 || *maxInFlightGlobal > 64 {
+		return fmt.Errorf("国际版在途上限非法: %d", *maxInFlightGlobal)
+	}
 	dur := map[string]string{
 		"soft-rate": *softRate, "soft-rate-max": *softRateMax,
 		"breaker-cooldown": *breakerCooldown, "breaker-cooldown-max": *breakerCooldownMax,
+		"degrade-cooldown": *degradeCooldown, "degrade-cooldown-max": *degradeCooldownMax,
 		"sticky-ttl": *stickyTTL, "sticky-gc": *stickyGC,
 	}
 	for k, v := range dur {
@@ -208,7 +237,7 @@ func cfgRender(e *Env, args []string) error {
 	hours := map[string][]int{}
 	raw := map[string]string{
 		"checkin": *checkinH, "travel": *travelH, "activity": *activityH,
-		"keepalive": *keepaliveH, "school": *schoolH, "cat": *catH,
+		"keepalive": *keepaliveH, "blackcat": *blackcatH,
 	}
 	for k, v := range raw {
 		h, err := parseHours(v)
@@ -243,26 +272,40 @@ func cfgRender(e *Env, args []string) error {
 	setPath(cfg, "schedule.travel_hours", hours["travel"])
 	setPath(cfg, "schedule.activity_hours", hours["activity"])
 	setPath(cfg, "schedule.keepalive_hours", hours["keepalive"])
-	setPath(cfg, "schedule.school_hours", hours["school"])
-	setPath(cfg, "schedule.cat_hours", hours["cat"])
+	// panel 版上游把旧 cat_*（夜猫子）改名为 blackcat_*，school_* 已并入签到排程：
+	// 这里只写新键，config.json 里遗留的旧键会被上游当作未知字段忽略。
+	setPath(cfg, "schedule.blackcat_hours", hours["blackcat"])
 	setPath(cfg, "schedule.checkin_enabled", *checkinOn)
 	setPath(cfg, "schedule.travel_enabled", *travelOn)
 	setPath(cfg, "schedule.activity_enabled", *activityOn)
 	setPath(cfg, "schedule.keepalive_enabled", *keepaliveOn)
-	setPath(cfg, "schedule.school_enabled", *schoolOn)
-	setPath(cfg, "schedule.cat_enabled", *catOn)
+	setPath(cfg, "schedule.blackcat_enabled", *blackcatOn)
+	setPath(cfg, "schedule.balance_refresh_enabled", *balanceRefreshOn)
+	setPath(cfg, "schedule.balance_refresh_minutes", *balanceRefreshMin)
 	setPath(cfg, "global.enabled", *globalOn)
+	setPath(cfg, "global.chat_base", *globalChatBase)
+	setPath(cfg, "global.billing_base", *globalBillingBase)
 	setPath(cfg, "upstream.timeout_seconds", *timeout)
-	setPath(cfg, "upstream.header_timeout_seconds", *timeout)
-	setPath(cfg, "upstream.idle_timeout_seconds", 300)
+	setPath(cfg, "upstream.header_timeout_seconds", *headerTimeout)
+	setPath(cfg, "upstream.idle_timeout_seconds", *idleTimeout)
+	setPath(cfg, "upstream.user_agent", *userAgent)
+	setPath(cfg, "upstream.client_version", *clientVersion)
+	setPath(cfg, "upstream.cli_version", *cliVersion)
 	setPath(cfg, "upstream.client_name", *clientName)
+	setPath(cfg, "upstream.device_token", *deviceToken)
+	setPath(cfg, "upstream.device_token_file", *deviceTokenFile)
+	setPath(cfg, "upstream.passthrough_ip", *passthroughIP)
 	setPath(cfg, "features.sanitize_blacklist_fingerprints", *sanitize)
 	setPath(cfg, "prompt.mode", *promptMode)
 	setPath(cfg, "prompt.file", *promptFile)
 	setPath(cfg, "pool.max_in_flight", *maxInFlight)
+	setPath(cfg, "pool.max_in_flight_global", *maxInFlightGlobal)
 	setPath(cfg, "pool.breaker_threshold", *breakerThreshold)
 	setPath(cfg, "pool.breaker_cooldown", nd(*breakerCooldown))
 	setPath(cfg, "pool.breaker_cooldown_max", nd(*breakerCooldownMax))
+	setPath(cfg, "pool.degrade_threshold", *degradeThreshold)
+	setPath(cfg, "pool.degrade_cooldown", nd(*degradeCooldown))
+	setPath(cfg, "pool.degrade_cooldown_max", nd(*degradeCooldownMax))
 	setPath(cfg, "pool.idle_weight_per_hour", *idleWeight)
 	setPath(cfg, "pool.idle_weight_max", *idleWeightMax)
 	setPath(cfg, "pool.expiring_soon", expiring)

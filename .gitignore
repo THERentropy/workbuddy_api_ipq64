@@ -1,6 +1,12 @@
 build/
 *.tar.gz
 .codebuddy/
+
+# 交接文档：含平台内部机制与实机结论，仅内部使用，不入库
+HANDOVER.md
+
+# 换上游时的临时克隆（核对配置键用），用完即删
+.upstream-probe/
 workbuddy/bin/
 workbuddy/scripts/
 workbuddy/bin_64/*

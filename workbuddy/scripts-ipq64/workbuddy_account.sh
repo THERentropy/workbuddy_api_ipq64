@@ -30,6 +30,10 @@ case "${action}" in
 		out=workbuddy_action.json
 		wb_prep wb2api-signin >/dev/null
 		;;
+	balance)
+		# 全量刷新余额走上游内嵌面板：顺带解冻余额已恢复的冷却账号
+		out=workbuddy_action.json
+		;;
 	remove)
 		out=workbuddy_action.json
 		;;
@@ -50,6 +54,9 @@ case "${action}" in
 			wb_log "新增/更新账号凭证，重启服务加载"
 			/koolshare/scripts/workbuddy_config.sh restart
 		fi
+		;;
+	balance)
+		"${WB_CTL}" panel /panel/api/balance_all --post='{}' --timeout=120 | wb_result "${out}"
 		;;
 	remove|signin)
 		"${WB_CTL}" account "$@" | wb_result "${out}"

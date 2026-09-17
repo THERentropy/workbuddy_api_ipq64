@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       upstream_ref:
-        description: "上游 workbuddy2api 的分支 / tag / commit"
+        description: "上游 workbuddy2api-panel 的分支 / tag / commit"
         required: false
-        default: "master"
+        default: "main"
       pack:
         description: "二进制处理方式：upx=体积小（默认，真机已验证）| gzip=回退，运行时解压到内存盘"
         required: false
@@ -57,11 +57,11 @@ jobs:
         with:
           go-version: '1.22.5'
 
-      - name: 检出上游 workbuddy2api
+      - name: 检出上游 workbuddy2api-panel
         uses: actions/checkout@v4
         with:
-          repository: Sliverkiss/workbuddy2api
-          ref: ${{ github.event.inputs.upstream_ref || 'master' }}
+          repository: linguo2625469/workbuddy2api-panel
+          ref: ${{ github.event.inputs.upstream_ref || 'main' }}
           path: _upstream
 
       - name: 记录上游版本
@@ -76,8 +76,9 @@ jobs:
           mkdir -p workbuddy/bin_64
           cd _upstream
           export GOOS=linux GOARCH=arm64 CGO_ENABLED=0
-          # 只编三个：server（网关）、login（OAuth）、signin（手动签到）
-          # credit（积分日报）未被插件页面使用，为省 jffs 空间不打包
+          # 只编三个：server（网关，已内嵌 /panel/ 管理面板）、login（OAuth）、signin（手动签到）
+          # credit（积分日报）/ trial（global 加油包）未被插件页面使用，为省 jffs 空间不打包
+          # 注意：panel 版上游内嵌了前端资源（go:embed），server 体积比旧上游略大
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api       ./cmd/server
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-login ./cmd/login
           go build -trimpath -ldflags="-s -w" -o ../workbuddy/bin_64/wb2api-signin ./cmd/signin

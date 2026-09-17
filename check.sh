@@ -45,7 +45,7 @@ else
 		workbuddy/scripts/workbuddy_config.sh workbuddy/scripts/workbuddy_status.sh \
 		workbuddy/scripts/workbuddy_account.sh workbuddy/scripts/workbuddy_key.sh \
 		workbuddy/scripts/workbuddy_log.sh workbuddy/scripts/workbuddy_migrate.sh \
-		workbuddy/scripts/workbuddy_env.sh; do
+		workbuddy/scripts/workbuddy_env.sh workbuddy/scripts/workbuddy_task.sh; do
 		if tar -tzf workbuddy.tar.gz | grep -qx "${need}"; then
 			echo "    ok  ${need}"
 		else

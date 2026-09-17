@@ -14,6 +14,7 @@
 //   policy   全局入站 IP 白黑名单
 //   log      审计日志 tail / stat / clean
 //   migrate  数据目录迁移
+//   panel    透传上游内嵌面板的 /panel/api/*（成长任务扫描 / 一键完成队列）
 //
 // 约定：所有子命令都向 stdout 输出一行 JSON（成功 {"ok":true,...}，失败
 // {"ok":false,"err":"..."} 且退出码非 0），便于脚本直接重定向成页面可读文件。
@@ -39,6 +40,7 @@ func usage() {
   wb2api-ctl policy   <show|set> [--ip-allow=cidr,cidr] [--ip-deny=cidr,cidr]
   wb2api-ctl log      <tail|stat|clean> [flags]
   wb2api-ctl migrate  <新数据目录> [--delete-old]
+  wb2api-ctl panel    </panel/api/路径> [--post=<json>] [--timeout=秒]
   wb2api-ctl version
 
 环境变量:
@@ -78,6 +80,8 @@ func main() {
 		err = cmdLog(os.Args[2:])
 	case "migrate":
 		err = cmdMigrate(os.Args[2:])
+	case "panel":
+		err = cmdPanel(os.Args[2:])
 	case "version", "-v", "--version":
 		printJSON(map[string]any{"ok": true, "version": version})
 		return

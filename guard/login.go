@@ -121,6 +121,13 @@ func cmdLogin(args []string) error {
 			expiresIn = 2592000 // 上游未给出时给 30 天兜底
 		}
 
+		// realm 以上游回传为准（panel 版上游按 domain 解析后回填 realm），
+		// 回传缺失/非法时退回命令行 --realm，保证凭证里恒带 realm 键。
+		useRealm := asString(raw["realm"])
+		if useRealm != "cn" && useRealm != "global" {
+			useRealm = *realm
+		}
+
 		var af authFile
 		af.Account.UID = uid
 		af.Account.EnterpriseID = asString(raw["enterprise_id"])
@@ -129,7 +136,7 @@ func cmdLogin(args []string) error {
 		af.Auth.RefreshToken = asString(raw["refresh_token"])
 		af.Auth.ExpiresAt = time.Now().Unix() + expiresIn
 		af.Auth.Domain = asString(raw["domain"])
-		af.Auth.Realm = *realm
+		af.Auth.Realm = useRealm
 
 		authDir := e.path("auths")
 		if err := os.MkdirAll(authDir, 0755); err != nil {
@@ -150,7 +157,7 @@ func cmdLogin(args []string) error {
 			"action":     action,
 			"uid":        uid,
 			"nickname":   af.Account.Nickname,
-			"realm":      *realm,
+			"realm":      useRealm,
 			"expires_at": af.Auth.ExpiresAt,
 			"file":       file,
 		})

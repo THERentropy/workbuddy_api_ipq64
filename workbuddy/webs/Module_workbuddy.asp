@@ -33,11 +33,12 @@
 	--wb-radius:14px;
 	--wb-a1:rgba(0,184,217,.18);
 }
-/* 皮肤：安装时按固件类型删除其余三行，只留一条生效 */
-:root{--wb-accent:#00B8D9;--wb-a1:rgba(0,184,217,.18);} /* W3C asuscss */
-:root{--wb-accent:#e82121;--wb-a1:rgba(232,33,33,.18);} /* W3C rogcss */
-:root{--wb-accent:#D0982C;--wb-a1:rgba(208,152,44,.18);} /* W3C tufcss */
-:root{--wb-accent:#2ED9C3;--wb-a1:rgba(46,217,195,.18);} /* W3C tscss */
+/* 皮肤：安装时按固件类型删除其余三行，只留一条生效
+   --wb-a1 淡底 / --wb-a2 描边 / --wb-a3 悬停底，全部跟随主色，避免写死青色 */
+:root{--wb-accent:#00B8D9;--wb-a1:rgba(0,184,217,.18);--wb-a2:rgba(0,184,217,.5);--wb-a3:rgba(0,184,217,.16);} /* W3C asuscss */
+:root{--wb-accent:#e82121;--wb-a1:rgba(232,33,33,.18);--wb-a2:rgba(232,33,33,.5);--wb-a3:rgba(232,33,33,.16);} /* W3C rogcss */
+:root{--wb-accent:#D0982C;--wb-a1:rgba(208,152,44,.18);--wb-a2:rgba(208,152,44,.5);--wb-a3:rgba(208,152,44,.16);} /* W3C tufcss */
+:root{--wb-accent:#2ED9C3;--wb-a1:rgba(46,217,195,.18);--wb-a2:rgba(46,217,195,.5);--wb-a3:rgba(46,217,195,.16);} /* W3C tscss */
 *{-webkit-box-sizing:border-box;box-sizing:border-box;}
 body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Light,"Microsoft JhengHei",Arial,sans-serif;font-size:13px;}
 .wb-wrap{max-width:1180px;margin:0 auto;padding:0 16px 90px 16px;}
@@ -69,7 +70,7 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 .wb-card{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:var(--wb-radius);
 	padding:16px 18px;margin-bottom:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 	box-shadow:0 10px 26px rgba(0,0,0,.32);transition:border-color .25s ease,transform .25s ease;}
-.wb-card:hover{border-color:rgba(0,184,217,.35);}
+.wb-card:hover{border-color:var(--wb-a2);}
 .wb-card h3{margin:0 0 12px 0;font-size:14px;font-weight:500;color:var(--wb-text);display:flex;align-items:center;gap:8px;}
 .wb-card h3:before{content:"";width:3px;height:14px;border-radius:2px;background:var(--wb-accent);}
 .wb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
@@ -104,7 +105,7 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 /* ---------- 控件 ---------- */
 .wb-btn{border:1px solid var(--wb-line);background:rgba(255,255,255,.06);color:var(--wb-text);
 	padding:7px 15px;border-radius:9px;cursor:pointer;font-size:12.5px;transition:all .2s ease;white-space:nowrap;}
-.wb-btn:hover{background:rgba(0,184,217,.16);border-color:rgba(0,184,217,.45);transform:translateY(-1px);}
+.wb-btn:hover{background:var(--wb-a3);border-color:var(--wb-a2);transform:translateY(-1px);}
 .wb-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 .wb-btn.primary{background:var(--wb-accent);border-color:transparent;color:#fff;font-weight:500;}
 .wb-btn.primary:hover{box-shadow:0 8px 20px rgba(0,0,0,.32);}
@@ -113,7 +114,7 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 .wb-btn.mini{padding:3px 9px;font-size:11.5px;border-radius:7px;}
 .wb-input,.wb-select{background:rgba(0,0,0,.32);border:1px solid var(--wb-line);color:var(--wb-text);
 	border-radius:8px;padding:7px 10px;font-size:12.5px;outline:none;transition:border-color .2s ease;width:100%;}
-.wb-input:focus,.wb-select:focus{border-color:rgba(0,184,217,.6);}
+.wb-input:focus,.wb-select:focus{border-color:var(--wb-a2);}
 .wb-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
 .wb-field{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
 .wb-field > label{flex:0 0 168px;color:var(--wb-text-3);font-size:12.5px;}
@@ -132,7 +133,7 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 	border-radius:16px;padding:18px 20px;box-shadow:0 24px 60px rgba(0,0,0,.6);animation:wbUp .28s ease both;}
 .wb-modal h4{margin:0 0 14px 0;font-size:15px;font-weight:600;}
 .wb-modal .wb-modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
-.wb-code{background:rgba(0,0,0,.45);border:1px dashed rgba(0,184,217,.45);border-radius:10px;padding:12px;
+.wb-code{background:rgba(0,0,0,.45);border:1px dashed var(--wb-a2);border-radius:10px;padding:12px;
 	word-break:break-all;font-family:'Lucida Console',Consolas,monospace;font-size:12px;color:#9fe8f5;margin:10px 0;}
 
 /* ---------- 提示气泡 ---------- */
@@ -141,13 +142,13 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 	box-shadow:0 12px 30px rgba(0,0,0,.5);animation:wbUp .25s ease both;max-width:80vw;}
 .wb-toast.ok{border-color:rgba(34,197,94,.5);color:#8ef0b0;}
 .wb-toast.err{border-color:rgba(239,68,68,.5);color:#ffabab;}
-.wb-toast.info{border-color:rgba(0,184,217,.5);color:#9fe8f5;}
+.wb-toast.info{border-color:var(--wb-a2);color:#9fe8f5;}
 
 /* ---------- 步骤条 ---------- */
 .wb-steps{display:flex;gap:8px;margin:6px 0 14px 0;}
 .wb-step{flex:1;text-align:center;padding:8px 6px;border-radius:9px;font-size:11.5px;color:var(--wb-text-3);
 	background:rgba(255,255,255,.05);border:1px solid transparent;transition:all .25s ease;}
-.wb-step.on{color:#fff;border-color:rgba(0,184,217,.5);background:rgba(0,184,217,.16);}
+.wb-step.on{color:#fff;border-color:var(--wb-a2);background:var(--wb-a3);}
 .wb-step.done{color:#8ef0b0;border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.12);}
 
 .wb-empty{padding:26px;text-align:center;color:var(--wb-text-3);font-size:12.5px;}
@@ -157,6 +158,15 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 	max-height:220px;overflow:auto;white-space:pre-wrap;font-family:'Lucida Console',Consolas,monospace;
 	font-size:11px;color:#a8b3b8;line-height:1.55;}
 .wb-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+/* ---------- 模型卡片 / 任务队列 ---------- */
+.wb-modelbox{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px;}
+.wb-model{background:var(--wb-card-2);border:1px solid var(--wb-line);border-radius:10px;padding:9px 11px;
+	transition:border-color .2s ease,transform .2s ease;}
+.wb-model:hover{border-color:var(--wb-a2);transform:translateY(-2px);}
+.wb-progress{background:var(--wb-card-2);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+.wb-hero h1 .wb-badge{margin-left:10px;vertical-align:middle;font-weight:400;}
+.wb-tabs{position:sticky;top:0;z-index:5;background:var(--wb-bg);}
 @media (max-width:720px){
 	.wb-wrap{padding:0 10px 80px 10px;}
 	.wb-field{flex-direction:column;align-items:flex-start;gap:5px;}
@@ -174,8 +184,8 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 <div class="wb-wrap">
 
 	<div class="wb-hero">
-		<h1>WorkBuddy 网关 <span class="wb-ver" id="wb_version"></span></h1>
-		<div class="wb-sub">CodeBuddy 账号池 → OpenAI 兼容 API · 多密钥分发 · 调用审计</div>
+		<h1>WorkBuddy 网关 <span class="wb-ver" id="wb_version"></span><span class="wb-badge b-muted" id="wb_hero_state">读取中</span></h1>
+		<div class="wb-sub">CodeBuddy 账号池 → OpenAI 兼容 API · 多密钥分发 · 调用审计 · 成长任务</div>
 		<div class="wb-hero-actions">
 			<label class="wb-switch" title="启用插件">
 				<input type="checkbox" id="workbuddy_enable"><i></i>
@@ -189,6 +199,7 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 	<div class="wb-tabs">
 		<div class="wb-tab active" data-p="p_status">状态总览</div>
 		<div class="wb-tab" data-p="p_account">账号池</div>
+		<div class="wb-tab" data-p="p_task">成长任务</div>
 		<div class="wb-tab" data-p="p_key">密钥管理</div>
 		<div class="wb-tab" data-p="p_log">统计与日志</div>
 		<div class="wb-tab" data-p="p_set">设置</div>
@@ -212,6 +223,7 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 				<tr><td>数据目录</td><td id="rt_data">-</td></tr>
 				<tr><td>开机自启 / 看门狗</td><td id="rt_auto">-</td></tr>
 				<tr><td>外网放行</td><td id="rt_wan">-</td></tr>
+				<tr><td>上游内嵌面板</td><td id="rt_panel">-</td></tr>
 			</tbody></table>
 			<div class="wb-note" style="margin-top:10px">
 				下游客户端请使用「对外端口 + 分发密钥」访问，例如 <span class="wb-mono">http://路由器IP:17863/v1/chat/completions</span>；上游网关只绑定 127.0.0.1，不直接暴露。
@@ -242,21 +254,57 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 				<span class="wb-inline" style="margin-left:auto">
 					<button class="wb-btn mini" id="wb_btn_add_account">添加账号</button>
 					<button class="wb-btn mini" id="wb_btn_signin">手动签到</button>
+					<button class="wb-btn mini" id="wb_btn_balance">刷新余额</button>
 					<button class="wb-btn mini" id="wb_btn_refresh_account">刷新</button>
 				</span>
 			</h3>
+			<div class="wb-note" style="margin-bottom:10px">
+				状态列读的是上游 <span class="wb-mono">/status</span> 的实时口径：冷却分「限流冷却（429 指数退避）/ 积分冷却（余额耗尽，等签到或余额刷新解冻）」，
+				另有连败降权与熔断两档临时出池；「凭证有效期」取自本地凭证文件，到期前上游会自动刷新。
+			</div>
 			<div class="wb-scroll">
 				<table class="wb-table">
-					<thead><tr><th>昵称 / UID</th><th>域</th><th>状态</th><th>积分</th><th>有效期</th><th>在途</th><th>操作</th></tr></thead>
+					<thead><tr><th>账号</th><th>域</th><th>状态</th><th>积分</th><th>成功率</th><th>冷却 / 降权</th><th>在途</th><th>操作</th></tr></thead>
 					<tbody id="account_tb"></tbody>
 				</table>
 			</div>
 			<div class="wb-empty" id="account_empty">暂无账号，点右上角「添加账号」扫码纳管</div>
 		</div>
 		<div class="wb-card">
-			<h3>可用模型</h3>
-			<div class="wb-inline" id="model_box"><span class="wb-note">点击右侧按钮从上游拉取</span></div>
-			<div style="margin-top:10px"><button class="wb-btn mini" id="wb_btn_models">拉取模型列表</button></div>
+			<h3>可用模型
+				<span class="wb-inline" style="margin-left:auto"><button class="wb-btn mini" id="wb_btn_models">拉取模型列表</button></span>
+			</h3>
+			<div class="wb-note" style="margin-bottom:10px">模型 id 前缀即路由域：<span class="wb-mono">cn:</span> 国内版 / <span class="wb-mono">global:</span> 国际版。密钥的模型白名单要按带前缀的完整 id 填。</div>
+			<div class="wb-modelbox" id="model_box"><span class="wb-note">点击右上角按钮从上游拉取</span></div>
+		</div>
+	</div>
+
+	<!-- ============ 成长任务 ============ -->
+	<div class="wb-panel" id="p_task">
+		<div class="wb-card">
+			<h3>待办扫描
+				<span class="wb-inline" style="margin-left:auto">
+					<select class="wb-select" id="task_conc" style="width:104px">
+						<option value="1">并发 1</option><option value="2">并发 2</option><option value="3">并发 3</option>
+					</select>
+					<button class="wb-btn mini" id="wb_btn_task_scan">扫描待办</button>
+					<button class="wb-btn mini primary" id="wb_btn_task_run">一键完成待办</button>
+					<button class="wb-btn mini" id="wb_btn_task_queue">刷新队列</button>
+				</span>
+			</h3>
+			<div class="wb-note" style="margin-bottom:10px">
+				走上游内嵌面板的 <span class="wb-mono">/panel/api/*</span>：扫描只读，会逐账号拉取成长任务与开学季待办；
+				「一键完成待办」把可自动化的任务排进队列（账号内串行、账号间按并发数并行），执行期间可随时刷新查看进度。
+				对话类任务会真实消耗少量积分，重复点击是幂等的（已达标自动跳过）。
+			</div>
+			<div class="wb-progress" id="task_queue_box" style="display:none"></div>
+			<div class="wb-scroll">
+				<table class="wb-table">
+					<thead><tr><th>账号</th><th>成长任务待办</th><th>开学季待办</th><th>备注</th></tr></thead>
+					<tbody id="task_tb"></tbody>
+				</table>
+			</div>
+			<div class="wb-empty" id="task_empty">点「扫描待办」拉取全账号待办清单</div>
 		</div>
 	</div>
 
@@ -328,10 +376,64 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 			<div class="wb-field"><label>对外监听端口</label><input class="wb-input" id="workbuddy_listen_port" style="max-width:160px" type="text"><span class="wb-hint">1-65535</span></div>
 			<div class="wb-field"><label>上游网关端口</label><input class="wb-input" id="workbuddy_upstream_port" style="max-width:160px" type="text"><span class="wb-hint">固定绑定 127.0.0.1</span></div>
 			<div class="wb-field"><label>上游 API Key</label><input class="wb-input" id="workbuddy_api_key" style="max-width:320px" type="text"><span class="wb-hint">上游全局密钥，留空=不鉴权</span></div>
+			<div class="wb-field"><label>请求体上限(MB)</label><input class="wb-input" id="workbuddy_max_body_mb" style="max-width:120px" type="text"><span class="wb-hint">超过直接 413，不再截断喂给上游</span></div>
 			<div class="wb-field"><label>开机自启</label><label class="wb-switch"><input type="checkbox" id="workbuddy_auto_start"><i></i></label></div>
-			<div class="wb-field"><label>放行外网访问</label><label class="wb-switch"><input type="checkbox" id="workbuddy_wan"><i></i></label><span class="wb-hint">默认仅 LAN，开启会把端口暴露到 WAN</span></div>
+			<div class="wb-field"><label>放行外网访问</label><label class="wb-switch"><input type="checkbox" id="workbuddy_wan"><i></i></label><span class="wb-hint">默认仅 LAN，开启会把端口（含 /panel/）暴露到 WAN</span></div>
 			<div class="wb-field"><label>看门狗（5 分钟）</label><label class="wb-switch"><input type="checkbox" id="workbuddy_watchdog"><i></i></label></div>
 			<div class="wb-field"><label>自动配置防火墙</label><label class="wb-switch"><input type="checkbox" id="workbuddy_firewall"><i></i></label></div>
+		</div>
+
+		<div class="wb-card">
+			<h3>上游行为</h3>
+			<div class="wb-field"><label>短 RPC 超时（秒）</label><input class="wb-input" id="workbuddy_timeout" style="max-width:120px" type="text"><span class="wb-hint">签到 / 刷新 / 余额 / 模型列表</span></div>
+			<div class="wb-field"><label>首字节超时（秒）</label><input class="wb-input" id="workbuddy_header_timeout" style="max-width:120px" type="text"><span class="wb-hint">聊天响应头，超时=换号重发</span></div>
+			<div class="wb-field"><label>流空闲超时（秒）</label><input class="wb-input" id="workbuddy_idle_timeout" style="max-width:120px" type="text"><span class="wb-hint">吐数据即续命，静默才断流</span></div>
+			<div class="wb-field"><label>提示词模式</label>
+				<select class="wb-select" id="workbuddy_prompt_mode" style="max-width:220px">
+					<option value="passthrough">passthrough（透传客户端）</option>
+					<option value="custom">custom（网关自有提示词替换）</option>
+				</select>
+				<span class="wb-hint">passsthrough 被审核误拦时会自动降级重试</span>
+			</div>
+			<div class="wb-field"><label>自定义提示词文件</label><input class="wb-input" id="workbuddy_prompt_file" style="max-width:340px" type="text"><span class="wb-hint">留空=内置默认；路径填了但读不到会启动报错</span></div>
+			<div class="wb-field"><label>指纹脱敏</label><label class="wb-switch"><input type="checkbox" id="workbuddy_sanitize"><i></i></label><span class="wb-hint">清洗出站请求体里的客户端指纹串</span></div>
+			<div class="wb-field"><label>国际版支持</label><label class="wb-switch"><input type="checkbox" id="workbuddy_global_enabled"><i></i></label></div>
+			<div class="wb-field"><label>国际版上游地址</label><input class="wb-input" id="workbuddy_global_chat_base" style="max-width:230px" type="text" placeholder="chat base，空=内置"><input class="wb-input" id="workbuddy_global_billing_base" style="max-width:230px" type="text" placeholder="billing base，空=内置"></div>
+		</div>
+
+		<div class="wb-card">
+			<h3>出站指纹（留空即上游默认）</h3>
+			<div class="wb-field"><label>User-Agent 覆盖</label><input class="wb-input" id="workbuddy_user_agent" style="max-width:340px" type="text" placeholder="WorkBuddy/5.5.4 WorkBuddy/5.5.4 CLI/2.137.1"></div>
+			<div class="wb-field"><label>客户端版本</label><input class="wb-input" id="workbuddy_client_version" style="max-width:160px" type="text"><span class="wb-hint">UA 的 WorkBuddy/&lt;ver&gt;</span></div>
+			<div class="wb-field"><label>CLI 版本</label><input class="wb-input" id="workbuddy_cli_version" style="max-width:160px" type="text"><span class="wb-hint">UA 的 CLI/&lt;ver&gt;</span></div>
+			<div class="wb-field"><label>用量归属 client_name</label><input class="wb-input" id="workbuddy_client_name" style="max-width:200px" type="text"><span class="wb-hint">官方桌面端填 WorkBuddy</span></div>
+			<div class="wb-field"><label>设备 Token</label><input class="wb-input" id="workbuddy_device_token" style="max-width:340px" type="text"><span class="wb-hint">X-Device-Token，留空不注入</span></div>
+			<div class="wb-field"><label>设备 Token 文件</label><input class="wb-input" id="workbuddy_device_token_file" style="max-width:340px" type="text"><span class="wb-hint">桌面端落盘路径，作为兜底来源</span></div>
+			<div class="wb-field"><label>透传客户端 IP</label><label class="wb-switch"><input type="checkbox" id="workbuddy_passthrough_ip"><i></i></label><span class="wb-hint">默认关闭（反代场景别开）</span></div>
+		</div>
+
+		<div class="wb-card">
+			<h3>账号池与流控</h3>
+			<div class="wb-field"><label>单账号最大在途</label><input class="wb-input" id="workbuddy_max_in_flight" style="max-width:120px" type="text"><span class="wb-hint">0=不限</span></div>
+			<div class="wb-field"><label>国际版在途上限</label><input class="wb-input" id="workbuddy_max_in_flight_global" style="max-width:120px" type="text"><span class="wb-hint">国际版风控更紧，默认压到 2</span></div>
+			<div class="wb-field"><label>熔断阈值（连续失败）</label><input class="wb-input" id="workbuddy_breaker_threshold" style="max-width:120px" type="text"></div>
+			<div class="wb-field"><label>熔断冷却 / 封顶</label><input class="wb-input" id="workbuddy_breaker_cooldown" style="max-width:110px" type="text"><input class="wb-input" id="workbuddy_breaker_cooldown_max" style="max-width:110px" type="text"></div>
+			<div class="wb-field"><label>连败降权阈值</label><input class="wb-input" id="workbuddy_degrade_threshold" style="max-width:120px" type="text"><span class="wb-hint">客户端错误/传输层连败，不罚号但临时出池</span></div>
+			<div class="wb-field"><label>降权时长 / 封顶</label><input class="wb-input" id="workbuddy_degrade_cooldown" style="max-width:110px" type="text"><input class="wb-input" id="workbuddy_degrade_cooldown_max" style="max-width:110px" type="text"></div>
+			<div class="wb-field"><label>软限流冷却 / 上限</label><input class="wb-input" id="workbuddy_soft_rate" style="max-width:110px" type="text"><input class="wb-input" id="workbuddy_soft_rate_max" style="max-width:110px" type="text"><span class="wb-hint">429 起 600s，连续触发指数退避</span></div>
+			<div class="wb-field"><label>快过期积分窗口</label><input class="wb-input" id="workbuddy_expiring_soon" style="max-width:120px" type="text"><span class="wb-hint">0 关闭</span></div>
+			<div class="wb-field"><label>会话粘性</label><label class="wb-switch"><input type="checkbox" id="workbuddy_sticky"><i></i></label><input class="wb-input" id="workbuddy_sticky_ttl" style="max-width:110px" type="text"><span class="wb-hint">绑定 TTL</span></div>
+		</div>
+
+		<div class="wb-card">
+			<h3>定时任务（整点，0-23，逗号分隔）</h3>
+			<div class="wb-note" style="margin-bottom:10px">开关关闭时小时配置会原样保留；开学季任务已并入签到排程末尾，无需单独配置。</div>
+			<div class="wb-field"><label>签到</label><label class="wb-switch"><input type="checkbox" id="workbuddy_checkin_enabled"><i></i></label><input class="wb-input" id="workbuddy_checkin_hours" style="max-width:140px" type="text"><span class="wb-hint">末尾自动跑连登兑换与抽奖</span></div>
+			<div class="wb-field"><label>猫猫旅行</label><label class="wb-switch"><input type="checkbox" id="workbuddy_travel_enabled"><i></i></label><input class="wb-input" id="workbuddy_travel_hours" style="max-width:140px" type="text"></div>
+			<div class="wb-field"><label>活跃上报</label><label class="wb-switch"><input type="checkbox" id="workbuddy_activity_enabled"><i></i></label><input class="wb-input" id="workbuddy_activity_hours" style="max-width:140px" type="text"><span class="wb-hint">点亮连登 / 解锁领养</span></div>
+			<div class="wb-field"><label>Token 保活</label><label class="wb-switch"><input type="checkbox" id="workbuddy_keepalive_enabled"><i></i></label><input class="wb-input" id="workbuddy_keepalive_hours" style="max-width:140px" type="text"></div>
+			<div class="wb-field"><label>夜猫子补足</label><label class="wb-switch"><input type="checkbox" id="workbuddy_blackcat_enabled"><i></i></label><input class="wb-input" id="workbuddy_blackcat_hours" style="max-width:140px" type="text"><span class="wb-hint">23:00-08:00 窗口内补足夜猫子任务</span></div>
+			<div class="wb-field"><label>余额后台刷新</label><label class="wb-switch"><input type="checkbox" id="workbuddy_balance_refresh"><i></i></label><input class="wb-input" id="workbuddy_balance_refresh_min" style="max-width:110px" type="text"><span class="wb-hint">分钟；余额恢复的冷却号自动解冻</span></div>
 		</div>
 
 		<div class="wb-card">
@@ -342,35 +444,6 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 			<div class="wb-inline">
 				<button class="wb-btn" id="wb_btn_migrate">迁移到该目录</button>
 				<span class="wb-note">凭证 / 密钥 / 审计日志会整体搬迁，建议插 U 盘后改到 /tmp/mnt/xxx 减少闪存写入</span>
-			</div>
-		</div>
-
-		<div class="wb-card">
-			<h3>定时任务（整点，0-23，逗号分隔）</h3>
-			<div class="wb-field"><label>签到</label><label class="wb-switch"><input type="checkbox" id="workbuddy_checkin_enabled"><i></i></label><input class="wb-input" id="workbuddy_checkin_hours" style="max-width:140px" type="text"></div>
-			<div class="wb-field"><label>猫猫旅行</label><label class="wb-switch"><input type="checkbox" id="workbuddy_travel_enabled"><i></i></label><input class="wb-input" id="workbuddy_travel_hours" style="max-width:140px" type="text"></div>
-			<div class="wb-field"><label>活跃上报</label><label class="wb-switch"><input type="checkbox" id="workbuddy_activity_enabled"><i></i></label><input class="wb-input" id="workbuddy_activity_hours" style="max-width:140px" type="text"></div>
-			<div class="wb-field"><label>Token 保活</label><label class="wb-switch"><input type="checkbox" id="workbuddy_keepalive_enabled"><i></i></label><input class="wb-input" id="workbuddy_keepalive_hours" style="max-width:140px" type="text"></div>
-			<div class="wb-field"><label>开学季任务</label><label class="wb-switch"><input type="checkbox" id="workbuddy_school_enabled"><i></i></label><input class="wb-input" id="workbuddy_school_hours" style="max-width:140px" type="text"></div>
-			<div class="wb-field"><label>夜猫子任务</label><label class="wb-switch"><input type="checkbox" id="workbuddy_cat_enabled"><i></i></label><input class="wb-input" id="workbuddy_cat_hours" style="max-width:140px" type="text"></div>
-		</div>
-
-		<div class="wb-card">
-			<h3>账号池与流控</h3>
-			<div class="wb-field"><label>单账号最大在途</label><input class="wb-input" id="workbuddy_max_in_flight" style="max-width:120px" type="text"></div>
-			<div class="wb-field"><label>熔断阈值（连续失败）</label><input class="wb-input" id="workbuddy_breaker_threshold" style="max-width:120px" type="text"></div>
-			<div class="wb-field"><label>熔断冷却 / 封顶</label><input class="wb-input" id="workbuddy_breaker_cooldown" style="max-width:110px" type="text"><input class="wb-input" id="workbuddy_breaker_cooldown_max" style="max-width:110px" type="text"></div>
-			<div class="wb-field"><label>软限流冷却 / 上限</label><input class="wb-input" id="workbuddy_soft_rate" style="max-width:110px" type="text"><input class="wb-input" id="workbuddy_soft_rate_max" style="max-width:110px" type="text"></div>
-			<div class="wb-field"><label>快过期积分窗口</label><input class="wb-input" id="workbuddy_expiring_soon" style="max-width:120px" type="text"><span class="wb-hint">0 关闭</span></div>
-			<div class="wb-field"><label>会话粘性</label><label class="wb-switch"><input type="checkbox" id="workbuddy_sticky"><i></i></label><input class="wb-input" id="workbuddy_sticky_ttl" style="max-width:110px" type="text"></div>
-			<div class="wb-field"><label>指纹脱敏</label><label class="wb-switch"><input type="checkbox" id="workbuddy_sanitize"><i></i></label></div>
-			<div class="wb-field"><label>国际版支持</label><label class="wb-switch"><input type="checkbox" id="workbuddy_global_enabled"><i></i></label></div>
-			<div class="wb-field"><label>上游超时（秒）</label><input class="wb-input" id="workbuddy_timeout" style="max-width:120px" type="text"></div>
-			<div class="wb-field"><label>提示词模式</label>
-				<select class="wb-select" id="workbuddy_prompt_mode" style="max-width:200px">
-					<option value="passthrough">passthrough（透传客户端）</option>
-					<option value="custom">custom（网关替换）</option>
-				</select>
 			</div>
 		</div>
 
@@ -410,6 +483,7 @@ body.wb-body{background:var(--wb-bg);color:var(--wb-text);font-family:Roboto-Lig
 var S = {
 	status:  "workbuddy_status.sh",
 	account: "workbuddy_account.sh",
+	task:    "workbuddy_task.sh",
 	key:     "workbuddy_key.sh",
 	log:     "workbuddy_log.sh",
 	migrate: "workbuddy_migrate.sh",
@@ -438,6 +512,37 @@ function ago(t){
 	if(s < 3600) return Math.floor(s / 60) + " 分钟前";
 	if(s < 86400) return Math.floor(s / 3600) + " 小时前";
 	return Math.floor(s / 86400) + " 天前";
+}
+// 秒 → 「12 分钟」「1 小时 20 分」（冷却/降权剩余时长展示）
+function dur(sec){
+	sec = Math.floor(sec || 0);
+	if(sec <= 0) return "0 秒";
+	if(sec < 60) return sec + " 秒";
+	var m = Math.floor(sec / 60);
+	if(m < 60) return m + " 分钟";
+	var h = Math.floor(m / 60);
+	if(h < 24) return h + " 小时" + (m % 60 ? " " + (m % 60) + " 分" : "");
+	return Math.floor(h / 24) + " 天" + (h % 24 ? " " + (h % 24) + " 小时" : "");
+}
+// Go time.Time 序列化成 RFC3339 → 剩余秒数（已过期/解析失败都返回 0）
+function untilSec(t){
+	if(!t) return 0;
+	var ms = Date.parse(t);
+	if(isNaN(ms)) return 0;
+	var s = Math.floor((ms - new Date().getTime()) / 1000);
+	return s > 0 ? s : 0;
+}
+function coolKindText(k){
+	if(k === "hard_credit") return "积分冷却";
+	if(k === "soft_rate") return "限流冷却";
+	return "冷却中";
+}
+// token 数 → 「200K」「1M」
+function fmtTok(n){
+	n = Number(n) || 0;
+	if(n >= 1048576) return (n / 1048576).toFixed(n % 1048576 ? 1 : 0) + "M";
+	if(n >= 1024) return Math.round(n / 1024) + "K";
+	return String(n);
 }
 function toast(msg, type){
 	var t = $("#wb_toast");
@@ -557,10 +662,11 @@ function getDbus(cb){
 }
 
 // 动作：提交 → 轮询结果（脚本只在结束时写一次结果，且开始前已清空）
-function run(script, params, fields, outFile, cb){
+// maxSec 可选：任务扫描 / 队列启动要逐账号打上游，比默认 60 秒慢，按需放宽。
+function run(script, params, fields, outFile, cb, maxSec){
 	post(script, params, fields, function(perr){
 		if(perr){ cb({ ok: false, err: perr }); return; }
-		var tries = 0, max = 60;
+		var tries = 0, max = maxSec || 60;
 		function next(){
 			if(tries < max){ setTimeout(step, 1000); }
 			else { cb({ ok: false, err: "等待结果超时（" + max + " 秒），请重试或查看服务日志" }); }
@@ -606,8 +712,12 @@ function loadStatus(quiet){
 		if(!quiet && d && !d.ok){ toast(d.err || "状态读取失败", "err"); }
 	});
 }
+function heroState(text, cls){
+	$("#wb_hero_state").attr("class", "wb-badge " + cls).text(text);
+}
 function renderStatus(d){
 	if(!d || !d.ok){
+		heroState("读取失败", "b-err");
 		$("#kpi_service").html(badge("读取失败", "b-err"));
 		$("#kpi_service_foot").text((d && d.err) || "无返回");
 		$("#kpi_account").text("-"); $("#kpi_account_foot").text("-");
@@ -616,6 +726,7 @@ function renderStatus(d){
 		return;
 	}
 	if(!d.running){
+		heroState("未运行", "b-err");
 		$("#kpi_service").html(badge("未运行", "b-err"));
 		$("#kpi_service_foot").text(d.err ? String(d.err).slice(0, 60) : "上游网关未就绪");
 		$("#kpi_account").text("-"); $("#kpi_account_foot").text("-");
@@ -624,6 +735,7 @@ function renderStatus(d){
 		return;
 	}
 	CACHE.status = d;
+	heroState("运行中", "b-ok");
 	$("#kpi_service").html(badge("运行中", "b-ok"));
 	$("#kpi_service_foot").text("账号 " + (d.total || 0) + " 个 · 会话粘性 " + (d.sticky_sessions || 0));
 	$("#kpi_account").text((d.healthy || 0) + " / " + (d.total || 0));
@@ -639,6 +751,11 @@ function loadRuntime(){
 		$("#rt_data").text(d.data_dir);
 		$("#rt_auto").text((d.auto_start === "1" ? "开" : "关") + " / 看门狗 " + (d.watchdog === "1" ? "开" : "关"));
 		$("#rt_wan").html(d.wan === "1" ? badge("已放行 WAN", "b-warn") : badge("仅 LAN", "b-ok"));
+		// 上游内嵌面板（panel 版上游）：静态页匿名放行，/panel/api/* 用任一把分发密钥登录
+		var host = location.hostname || "路由器IP";
+		var panelURL = "http://" + host + ":" + (d.listen_port || "17863") + "/panel/";
+		$("#rt_panel").html('<a class="wb-btn mini" target="_blank" href="' + esc(panelURL) + '">打开上游面板</a>'
+			+ '<span class="wb-note" style="margin-left:8px">登录时填任一把分发密钥（sk-…）</span>');
 		$("#wb_version").text("v" + (d.version || ""));
 	});
 }
@@ -679,33 +796,73 @@ function renderAccounts(){
 		var nick = (r && r.nickname) || (c && c.nickname) || ("UID " + uid);
 		var realm = (r && r.realm) || (c && c.realm) || "cn";
 
-		var state;
-		if(r){
-			if(r.disabled) state = badge("已禁用", "b-err");
-			else if(r.cooling) state = badge("冷却中", "b-warn");
-			else state = badge("健康", "b-ok");
-			if(r.reason) state += '<div class="wb-note">' + esc(r.reason) + '</div>';
-		}else{
+		// ---- 运行态（来自上游 /status，服务没起来时为 null）----
+		var cool = (r && r.cooling) ? (r.cool_remaining_sec || 0) : 0;
+		var brk  = r ? untilSec(r.breaker_until) : 0;
+		var deg  = r ? untilSec(r.degrade_until) : 0;
+
+		var state, stateFoot = "";
+		if(!r){
 			state = badge("服务未运行", "b-muted");
+		}else if(r.disabled){
+			state = badge("已禁用", "b-err");
+			stateFoot = r.disabled_reason || "";
+		}else if(brk > 0){
+			state = badge("熔断中", "b-err");
+		}else if(cool > 0){
+			state = badge(coolKindText(r.cool_kind), "b-warn");
+		}else if(deg > 0){
+			state = badge("降权中", "b-warn");
+		}else{
+			state = badge("健康", "b-ok");
+		}
+		// 模型级限额台账（6004 重置墙钟 / 11102 负缓存）：账号整体健康但这些模型暂时打不动
+		if(r && r.rate_limited_models && r.rate_limited_models.length){
+			var lm = [];
+			for(var q = 0; q < r.rate_limited_models.length; q++){ lm.push(r.rate_limited_models[q].model); }
+			stateFoot = (stateFoot ? stateFoot + " · " : "") + "模型限额：" + lm.join(", ");
+		}
+		if(stateFoot){ state += '<div class="wb-note">' + esc(stateFoot) + '</div>'; }
+
+		// ---- 冷却 / 降权 / 熔断剩余 ----
+		var coolCell = "-";
+		if(r){
+			var parts = [];
+			if(cool > 0){ parts.push((r.cool_kind === "hard_credit" ? "积分 " : "限流 ") + dur(cool)); }
+			if(brk > 0){ parts.push("熔断 " + dur(brk)); }
+			if(deg > 0){ parts.push("降权 " + dur(deg)); }
+			if(!parts.length && (r.soft_streak || 0) > 1){ parts.push("软冷却退避 ×" + r.soft_streak); }
+			coolCell = parts.length ? '<span class="wb-note">' + esc(parts.join(" · ")) + "</span>"
+				: '<span class="wb-note">—</span>';
 		}
 
-		// 有效期：优先用凭证里的 expires_at
-		var exp = c ? c.expires_at : 0;
-		var pct = 0, txt = "未知";
-		if(exp){
-			var left = exp - Math.floor(new Date().getTime() / 1000);
-			pct = Math.max(0, Math.min(100, Math.round(left / (60 * 24 * 3600) * 100)));
-			txt = left > 0 ? (Math.floor(left / 86400) + " 天") : "已过期";
+		// ---- 成功率 & 积分 ----
+		var rateCell = "-";
+		var credit = "-", creditFoot = "";
+		if(r){
+			var okN = r.success_count || 0, errN = r.err_total || 0, tot = okN + errN;
+			rateCell = (tot ? Math.round(okN / tot * 100) + "%" : "—")
+				+ '<div class="wb-note">成功 ' + okN + " · 失败 " + errN + "</div>";
+			credit = (r.credits === undefined) ? "-" : r.credits;
+			if(r.credits_total){ creditFoot = "总额度 " + r.credits_total; }
 		}
-		var credit = r && r.credits !== undefined ? r.credits : "-";
+
+		// ---- 凭证有效期（本地文件，过期前上游会自动刷新）----
+		var expTxt = "凭证无到期时间";
+		if(c && c.expires_at){
+			var left = c.expires_at - Math.floor(new Date().getTime() / 1000);
+			expTxt = left > 0 ? ("凭证 " + Math.floor(left / 86400) + " 天后到期") : "凭证已过期，待自动刷新";
+		}
 
 		html += "<tr>"
-			+ '<td data-l="账号">' + esc(nick) + '<div class="wb-note wb-mono">' + esc(uid) + '</div></td>'
-			+ '<td data-l="域">' + (realm === "global" ? badge("国际版", "b-info") : badge("国内版", "b-muted")) + '</td>'
-			+ '<td data-l="状态">' + state + '</td>'
-			+ '<td data-l="积分">' + credit + '</td>'
-			+ '<td data-l="有效期"><div class="wb-bar"><i style="width:' + pct + '%"></i></div><div class="wb-note">' + txt + '</div></td>'
-			+ '<td data-l="在途">' + (r ? (r.in_flight || 0) : "-") + '</td>'
+			+ '<td data-l="账号">' + esc(nick) + '<div class="wb-note wb-mono">' + esc(uid) + "</div>"
+			+ '<div class="wb-note">' + esc(expTxt) + "</div></td>"
+			+ '<td data-l="域">' + (realm === "global" ? badge("国际版", "b-info") : badge("国内版", "b-muted")) + "</td>"
+			+ '<td data-l="状态">' + state + "</td>"
+			+ '<td data-l="积分">' + credit + (creditFoot ? '<div class="wb-note">' + esc(creditFoot) + "</div>" : "") + "</td>"
+			+ '<td data-l="成功率">' + rateCell + "</td>"
+			+ '<td data-l="冷却/降权">' + coolCell + "</td>"
+			+ '<td data-l="在途">' + (r ? (r.in_flight || 0) : "-") + "</td>"
 			+ '<td data-l="操作"><button class="wb-btn mini danger" onclick="removeAccount(\'' + esc(uid) + '\')">删除</button></td>'
 			+ "</tr>";
 	}
@@ -794,20 +951,136 @@ $("#wb_btn_signin").click(function(){
 	});
 });
 $("#wb_btn_refresh_account").click(loadAccounts);
+// 刷新余额：走上游内嵌面板的全量余额查询（顺带解冻余额已恢复的冷却账号）
+$("#wb_btn_balance").click(function(){
+	var $b = $(this).prop("disabled", true).text("刷新中…");
+	run(S.account, ["balance"], {}, "workbuddy_action.json", function(d){
+		$b.prop("disabled", false).text("刷新余额");
+		toast(d.ok ? "已向上游刷新全部账号余额" : ("刷新失败：" + (d.err || "")), d.ok ? "ok" : "err");
+		if(d.ok) setTimeout(loadAccounts, 1200);
+	});
+});
 $("#wb_btn_models").click(function(){
 	var $b = $(this).prop("disabled", true).text("拉取中…");
 	run(S.status, ["models"], {}, "workbuddy_models.json", function(d){
 		$b.prop("disabled", false).text("拉取模型列表");
-		var ids = [];
-		if(d && d.ok && d.raw && d.raw.data){
-			for(var i = 0; i < d.raw.data.length; i++){ ids.push(d.raw.data[i].id); }
-		}
-		if(!ids.length){ $("#model_box").html('<span class="wb-note">没取到模型（服务未运行，或账号无授权）</span>'); return; }
+		var list = (d && d.ok && d.raw && d.raw.data) ? d.raw.data : [];
+		if(!list.length){ $("#model_box").html('<span class="wb-note">没取到模型（服务未运行，或账号无授权）</span>'); return; }
 		var h = "";
-		for(var j = 0; j < ids.length; j++){ h += badge(ids[j], "b-info"); }
+		for(var j = 0; j < list.length; j++){
+			var m = list[j], notes = [];
+			if(m.context_length){ notes.push("上下文 " + fmtTok(m.context_length)); }
+			if(m.max_output_tokens){ notes.push("输出 " + fmtTok(m.max_output_tokens)); }
+			if(m.reasoning_supported_efforts && m.reasoning_supported_efforts.length){
+				notes.push("思考档 " + m.reasoning_supported_efforts.join("/"));
+			}
+			h += '<div class="wb-model"><div class="wb-mono">' + esc(m.id) + "</div>"
+				+ (notes.length ? '<div class="wb-note">' + esc(notes.join(" · ")) + "</div>" : "") + "</div>";
+		}
 		$("#model_box").html(h);
 	});
 });
+
+/* ============================ 成长任务 ============================ */
+// 数据来自上游内嵌面板：扫描（只读）/ 队列启动（异步）/ 队列状态（轮询）
+var TASK_TIMER = null;
+function loadTaskScan(){
+	var $b = $("#wb_btn_task_scan").prop("disabled", true).text("扫描中…");
+	run(S.task, ["scan"], {}, "workbuddy_tasks.json", function(d){
+		$b.prop("disabled", false).text("扫描待办");
+		if(!d.ok){ toast("扫描失败：" + (d.err || ""), "err"); return; }
+		renderTasks(d.items || []);
+		toast("扫描完成，共 " + (d.items || []).length + " 个账号", "ok");
+	}, 180);
+}
+// 待办徽标：成长任务带进度（progress/target_count），开学季只带状态
+function taskTags(list, kind){
+	if(!list.length){ return '<span class="wb-note">—</span>'; }
+	var h = "";
+	for(var j = 0; j < list.length; j++){
+		var t = list[j];
+		var label = t.task_code;
+		if(t.target_count){ label += " " + (t.progress || 0) + "/" + t.target_count; }
+		h += badge(label, kind === "school" ? "b-info" : "b-warn");
+	}
+	return h;
+}
+function renderTasks(items){
+	var html = "";
+	for(var i = 0; i < items.length; i++){
+		var it = items[i], note = [];
+		if(it.in_period){ note.push("开学季活动中"); }
+		if(it.growth_error){ note.push("成长任务：" + it.growth_error); }
+		if(it.school_error){ note.push("开学季：" + it.school_error); }
+		html += "<tr>"
+			+ '<td data-l="账号">' + esc(it.nickname || it.uid) + '<div class="wb-note wb-mono">' + esc(it.uid) + "</div></td>"
+			+ '<td data-l="成长待办">' + taskTags(it.growth || [], "growth") + "</td>"
+			+ '<td data-l="开学季">' + taskTags(it.school || [], "school") + "</td>"
+			+ '<td data-l="备注"><span class="wb-note">' + esc(note.join(" · ") || "—") + "</span></td>"
+			+ "</tr>";
+	}
+	$("#task_tb").html(html);
+	$("#task_empty").toggle(items.length === 0).text("全部账号暂无待办任务");
+}
+function startTaskRun(){
+	var conc = $("#task_conc").val() || "1";
+	if(!confirm("把待办任务排队执行？涉及真实对话的任务会消耗少量积分，重复执行是幂等的。")) return;
+	var $b = $("#wb_btn_task_run").prop("disabled", true).text("启动中…");
+	run(S.task, ["run", "--conc=" + conc], {}, "workbuddy_task_run.json", function(d){
+		$b.prop("disabled", false).text("一键完成待办");
+		if(!d.ok){ toast("启动失败：" + (d.err || ""), "err"); return; }
+		if(d.started === false){ toast(d.message || "没有待办任务", "info"); return; }
+		toast("队列已启动，共 " + (d.total || 0) + " 项", "ok");
+		loadTaskQueue();
+	}, 120);
+}
+function loadTaskQueue(){
+	run(S.task, ["queue"], {}, "workbuddy_task_queue.json", function(d){
+		if(!d.ok){ $("#task_queue_box").hide(); return; }
+		var items = d.items || [];
+		if(!items.length && !d.running){ $("#task_queue_box").hide(); stopTaskLoop(); return; }
+		var done = 0, running = 0, failed = 0;
+		for(var i = 0; i < items.length; i++){
+			if(items[i].status === "done"){ done++; }
+			else if(items[i].status === "running"){ running++; }
+			else if(items[i].status === "error"){ failed++; }
+		}
+		var pct = items.length ? Math.round((done + failed) / items.length * 100) : 0;
+		var h = '<div class="wb-inline" style="justify-content:space-between">'
+			+ "<b>执行队列</b><span class=\"wb-note\">" + (d.running ? "执行中" : "已结束")
+			+ " · 完成 " + done + " / " + items.length + " · 失败 " + failed
+			+ " · 并发 " + (d.conc || 1) + "</span></div>"
+			+ '<div class="wb-bar" style="margin:8px 0"><i style="width:' + pct + '%"></i></div>';
+		var cur = "";
+		for(var j = 0; j < items.length; j++){
+			var it = items[j];
+			var cls = it.status === "done" ? "b-ok" : (it.status === "error" ? "b-err" : (it.status === "running" ? "b-warn" : "b-muted"));
+			cur += "<tr>"
+				+ "<td>" + esc(it.nickname || it.uid) + "</td>"
+				+ "<td>" + (it.kind === "school" ? "开学季" : "成长") + "</td>"
+				+ '<td class="wb-mono">' + esc(it.code) + "</td>"
+				+ "<td>" + badge(it.status, cls) + "</td>"
+				+ '<td><span class="wb-note">' + esc(it.message || "") + "</span></td>"
+				+ "</tr>";
+		}
+		$("#task_queue_box").html(h + '<div class="wb-scroll" style="max-height:240px"><table class="wb-table"><tbody>' + cur + "</tbody></table></div>").show();
+		// 队列跑着就 3 秒轮询一次，跑完自动停，避免离开页面后还在打上游
+		if(d.running){ startTaskLoop(); } else { stopTaskLoop(); }
+	}, 40);
+}
+function startTaskLoop(){
+	if(TASK_TIMER){ return; }
+	TASK_TIMER = setInterval(function(){
+		if(document.hidden){ return; }
+		loadTaskQueue();
+	}, 3000);
+}
+function stopTaskLoop(){
+	if(TASK_TIMER){ clearInterval(TASK_TIMER); TASK_TIMER = null; }
+}
+$("#wb_btn_task_scan").click(loadTaskScan);
+$("#wb_btn_task_run").click(startTaskRun);
+$("#wb_btn_task_queue").click(function(){ loadTaskQueue(); });
 
 /* ============================ 密钥管理 ============================ */
 function loadKeys(){
@@ -974,29 +1247,70 @@ $("#wb_btn_slog").click(function(){
 /* ============================ 设置 ============================ */
 var SET_FIELDS = [
 	"workbuddy_listen_port", "workbuddy_upstream_port", "workbuddy_api_key", "workbuddy_data_dir",
-	"workbuddy_audit_days", "workbuddy_audit_max_mb",
+	"workbuddy_audit_days", "workbuddy_audit_max_mb", "workbuddy_max_body_mb",
+	"workbuddy_timeout", "workbuddy_header_timeout", "workbuddy_idle_timeout",
+	"workbuddy_prompt_mode", "workbuddy_prompt_file",
+	"workbuddy_global_chat_base", "workbuddy_global_billing_base",
+	"workbuddy_user_agent", "workbuddy_client_name", "workbuddy_client_version", "workbuddy_cli_version",
+	"workbuddy_device_token", "workbuddy_device_token_file",
+	"workbuddy_max_in_flight", "workbuddy_max_in_flight_global",
+	"workbuddy_breaker_threshold", "workbuddy_breaker_cooldown", "workbuddy_breaker_cooldown_max",
+	"workbuddy_degrade_threshold", "workbuddy_degrade_cooldown", "workbuddy_degrade_cooldown_max",
+	"workbuddy_soft_rate", "workbuddy_soft_rate_max", "workbuddy_expiring_soon", "workbuddy_sticky_ttl",
 	"workbuddy_checkin_hours", "workbuddy_travel_hours", "workbuddy_activity_hours",
-	"workbuddy_keepalive_hours", "workbuddy_school_hours", "workbuddy_cat_hours",
-	"workbuddy_max_in_flight", "workbuddy_breaker_threshold", "workbuddy_breaker_cooldown",
-	"workbuddy_breaker_cooldown_max", "workbuddy_soft_rate", "workbuddy_soft_rate_max",
-	"workbuddy_expiring_soon", "workbuddy_sticky_ttl", "workbuddy_timeout", "workbuddy_prompt_mode"
+	"workbuddy_keepalive_hours", "workbuddy_blackcat_hours", "workbuddy_balance_refresh_min"
 ];
 var SET_SWITCHES = [
 	"workbuddy_auto_start", "workbuddy_wan", "workbuddy_watchdog", "workbuddy_firewall",
+	"workbuddy_sticky", "workbuddy_sanitize", "workbuddy_global_enabled", "workbuddy_passthrough_ip",
 	"workbuddy_checkin_enabled", "workbuddy_travel_enabled", "workbuddy_activity_enabled",
-	"workbuddy_keepalive_enabled", "workbuddy_school_enabled", "workbuddy_cat_enabled",
-	"workbuddy_sticky", "workbuddy_sanitize", "workbuddy_global_enabled"
+	"workbuddy_keepalive_enabled", "workbuddy_blackcat_enabled", "workbuddy_balance_refresh"
 ];
 var SET_DEFAULTS = {
-	workbuddy_listen_port: "17863", workbuddy_upstream_port: "7863",
+	workbuddy_listen_port: "17863", workbuddy_upstream_port: "7863", workbuddy_api_key: "",
 	workbuddy_data_dir: "/koolshare/etc/workbuddy", workbuddy_audit_days: "3", workbuddy_audit_max_mb: "2",
+	workbuddy_max_body_mb: "8",
+	workbuddy_timeout: "120", workbuddy_header_timeout: "120", workbuddy_idle_timeout: "300",
+	workbuddy_prompt_mode: "passthrough", workbuddy_prompt_file: "",
+	workbuddy_global_chat_base: "", workbuddy_global_billing_base: "",
+	workbuddy_user_agent: "", workbuddy_client_name: "WorkBuddy", workbuddy_client_version: "",
+	workbuddy_cli_version: "", workbuddy_device_token: "", workbuddy_device_token_file: "",
+	workbuddy_max_in_flight: "3", workbuddy_max_in_flight_global: "2",
+	workbuddy_breaker_threshold: "3", workbuddy_breaker_cooldown: "30m", workbuddy_breaker_cooldown_max: "6h",
+	workbuddy_degrade_threshold: "5", workbuddy_degrade_cooldown: "10m", workbuddy_degrade_cooldown_max: "2h",
+	workbuddy_soft_rate: "600s", workbuddy_soft_rate_max: "2h",
+	workbuddy_expiring_soon: "168h", workbuddy_sticky_ttl: "30m",
 	workbuddy_checkin_hours: "9,21", workbuddy_travel_hours: "9,21", workbuddy_activity_hours: "10",
-	workbuddy_keepalive_hours: "22", workbuddy_school_hours: "12", workbuddy_cat_hours: "1",
-	workbuddy_max_in_flight: "3", workbuddy_breaker_threshold: "3", workbuddy_breaker_cooldown: "30m",
-	workbuddy_breaker_cooldown_max: "6h", workbuddy_soft_rate: "600s", workbuddy_soft_rate_max: "2h",
-	workbuddy_expiring_soon: "168h", workbuddy_sticky_ttl: "30m", workbuddy_timeout: "120",
-	workbuddy_prompt_mode: "passthrough"
+	workbuddy_keepalive_hours: "22", workbuddy_blackcat_hours: "23", workbuddy_balance_refresh_min: "5"
 };
+// 数值型字段的合法区间（名称 → [最小值, 最大值, 提示名]）
+var SET_NUMBERS = {
+	workbuddy_max_body_mb: [1, 64, "请求体上限(MB)"],
+	workbuddy_timeout: [1, 3600, "短 RPC 超时(秒)"],
+	workbuddy_header_timeout: [1, 3600, "首字节超时(秒)"],
+	workbuddy_idle_timeout: [1, 3600, "流空闲超时(秒)"],
+	workbuddy_max_in_flight: [0, 64, "单账号最大在途"],
+	workbuddy_max_in_flight_global: [0, 64, "国际版在途上限"],
+	workbuddy_breaker_threshold: [1, 99, "熔断阈值"],
+	workbuddy_degrade_threshold: [1, 99, "连败降权阈值"],
+	workbuddy_balance_refresh_min: [1, 1440, "余额刷新间隔(分钟)"]
+};
+// 时长型字段（Go duration，支持 d/h/m/s 后缀；expiring_soon 另允许 0=关闭）
+var SET_DURATIONS = {
+	workbuddy_soft_rate: "软限流冷却",
+	workbuddy_soft_rate_max: "软限流封顶",
+	workbuddy_breaker_cooldown: "熔断冷却",
+	workbuddy_breaker_cooldown_max: "熔断封顶",
+	workbuddy_degrade_cooldown: "降权时长",
+	workbuddy_degrade_cooldown_max: "降权封顶",
+	workbuddy_sticky_ttl: "会话粘性 TTL",
+	workbuddy_expiring_soon: "快过期积分窗口"
+};
+function checkDur(v){
+	v = $.trim(String(v === undefined || v === null ? "" : v));
+	if(v === "0"){ return true; }            // 0 = 关闭（仅快过期窗口有该语义）
+	return /^[1-9][0-9]*(d|h|m|s)$/.test(v);
+}
 function fillSettings(){
 	getDbus(function(m){
 		function val(k){ return (m[k] === undefined || m[k] === "") ? SET_DEFAULTS[k] : m[k]; }
@@ -1014,13 +1328,15 @@ function collectFields(){
 	return f;
 }
 function validateSettings(f){
+	// 端口
 	var ports = ["workbuddy_listen_port", "workbuddy_upstream_port"];
 	for(var i = 0; i < ports.length; i++){
 		var v = parseInt(f[ports[i]], 10);
 		if(!(v >= 1 && v <= 65535)){ toast("端口必须是 1-65535", "err"); return false; }
 	}
+	// 整点列表（0-23，逗号分隔）
 	var hours = ["workbuddy_checkin_hours", "workbuddy_travel_hours", "workbuddy_activity_hours",
-		"workbuddy_keepalive_hours", "workbuddy_school_hours", "workbuddy_cat_hours"];
+		"workbuddy_keepalive_hours", "workbuddy_blackcat_hours"];
 	for(var j = 0; j < hours.length; j++){
 		var parts = String(f[hours[j]] || "").split(",");
 		for(var k = 0; k < parts.length; k++){
@@ -1028,6 +1344,23 @@ function validateSettings(f){
 			if(p === "") continue;
 			var n = parseInt(p, 10);
 			if(isNaN(n) || n < 0 || n > 23){ toast("定时时刻必须是 0-23 的整数：" + f[hours[j]], "err"); return false; }
+		}
+	}
+	// 数值区间
+	for(var key in SET_NUMBERS){
+		if(!SET_NUMBERS.hasOwnProperty(key)){ continue; }
+		var spec = SET_NUMBERS[key], num = parseInt(f[key], 10);
+		if(isNaN(num) || num < spec[0] || num > spec[1]){
+			toast(spec[2] + " 必须是 " + spec[0] + "-" + spec[1] + " 的整数", "err");
+			return false;
+		}
+	}
+	// 时长（30s / 10m / 2h / 7d，快过期窗口允许 0）
+	for(var dk in SET_DURATIONS){
+		if(!SET_DURATIONS.hasOwnProperty(dk)){ continue; }
+		if(!checkDur(f[dk])){
+			toast(SET_DURATIONS[dk] + " 格式错误（支持 30s / 10m / 2h / 7d）", "err");
+			return false;
 		}
 	}
 	return true;
@@ -1092,10 +1425,13 @@ $(".wb-tab").click(function(){
 	$("#" + $(this).attr("data-p")).addClass("active");
 	var p = $(this).attr("data-p");
 	if(p === "p_account") loadAccounts();
+	else if(p === "p_task"){ loadTaskQueue(); }
 	else if(p === "p_key") loadKeys();
 	else if(p === "p_log"){ loadStat(); loadLog(); }
 	else if(p === "p_set") fillSettings();
 	else loadStatus(true);
+	// 离开任务页就停掉队列轮询，别让它在后台一直打上游
+	if(p !== "p_task"){ stopTaskLoop(); }
 });
 setInterval(function(){
 	// 页面在后台、或上一次请求还没回来（比如正在 OAuth 轮询）就跳过本次自动刷新。
